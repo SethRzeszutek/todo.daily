@@ -1934,6 +1934,34 @@ function bar(done, total, n = 24){
   return '█'.repeat(f) + '·'.repeat(n - f);
 }
 
+/* The cell bar sits in a flex:1 row, so a fixed count leaves a gap on any
+   panel wider than itself. The count is measured instead. The measurement
+   goes through a child node: scrollWidth is no use here because it never
+   reports less than clientWidth, so a run that fits reads back as exactly
+   the room available whatever its real width. A child inherits the font and
+   reports its true layout width even though the parent clips it. Cached
+   against room and font, since this runs on every repaint. */
+let cellFit = { key:'', per:0 };
+function cellsAcross(node, fallback = 24){
+  const room = node.clientWidth;
+  if (!room) return fallback;                 // not laid out, or hidden
+  const key = `${room}|${state.settings.font}`;
+  if (cellFit.key !== key) {
+    const RUN = 40;
+    const probe = document.createElement('span');
+    probe.style.whiteSpace = 'pre';
+    probe.textContent = '·'.repeat(RUN);
+    node.textContent = '';
+    node.append(probe);
+    const per = probe.getBoundingClientRect().width / RUN;
+    node.textContent = '';
+    if (per > 0) cellFit = { key, per };
+  }
+  return cellFit.per > 0
+    ? Math.max(6, Math.floor(room / cellFit.per))
+    : fallback;
+}
+
 function paintHead(){
   if (mode === 'week') {
     const a = weekStart(view), b = weekEnd(view);
@@ -1961,7 +1989,7 @@ function paintHead(){
 
 function paintMeter(){
   const t = tasks(view), done = t.filter(x => x.done).length;
-  el.cells.textContent = bar(done, t.length);
+  el.cells.textContent = bar(done, t.length, cellsAcross(el.cells));
   el.fill.style.width = (t.length ? done / t.length * 100 : 0) + '%';
   el.cnt.textContent = `${pad2(done)}/${pad2(t.length)}`;
 }
@@ -2988,6 +3016,18 @@ document.addEventListener('pointermove', e => {
 }, true);
 for (const end of ['pointerup', 'pointercancel'])
   document.addEventListener(end, () => { dragRange = null; }, true);
+
+let sizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(sizeTimer);
+  sizeTimer = setTimeout(paintMeter, 120);
+});
+/* a web font swapping in changes the cell width without changing the setting */
+if (document.fonts && document.fonts.addEventListener)
+  document.fonts.addEventListener('loadingdone', () => {
+    cellFit = { key:'', per:0 };
+    paintMeter();
+  });
 
 // last-ditch write if the tab goes away mid-debounce
 window.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });

@@ -32,8 +32,16 @@ function env({ platform = 'MacIntel', seed = null, kept = null } = {}) {
       // a real browser refuses to focus a disabled or hidden element;
       // modelling that is what catches navigation stalling on one
       focus(){ if (!e.disabled && !e.hidden) focused = e }, blur(){ if (focused===e) focused = null },
-      getBoundingClientRect(){ return { left:100, top:40, right:900, bottom:640,
-                                        width:800, height:600 } },
+      /* An anonymous element carrying text measures as text: 10px a
+         character. Named elements keep the fixed box the layout tests use. */
+      getBoundingClientRect(){
+        if (!e.id && tc) return { left:0, top:0, right:tc.length*10, bottom:20,
+                                  width:tc.length*10, height:20 };
+        return { left:100, top:40, right:900, bottom:640, width:800, height:600 };
+      },
+      /* laid-out width is opt-in per element; 0 means "not measurable yet",
+         which is what the real node reports before first layout */
+      clientWidth: 0,
       click(){ (this._l.click||[]).forEach(f=>f({ preventDefault(){} })) },
       /* a real dispatch stamps the node as the event target, and handlers
          read e.target.value off it */
@@ -938,6 +946,42 @@ for (const [plat, expect] of [['MacIntel','⌥W'], ['Win32','Alt+W']]) {
                                   === tasks.filter(x=>x.mark).length);
     }
   }
+}
+
+/* ══ progress bar width ══ */
+{
+  S('progress bar');
+  const t = env();
+  const cells = () => t.el('cells').textContent;
+
+  /* before layout the node reports no width, so the bar keeps a sane count
+     rather than collapsing to nothing */
+  t.addTask('one');
+  ok('falls back to a fixed count when unmeasurable', cells().length === 24,
+     `${cells().length} cells`);
+
+  /* once it has a width the bar spans it: the stub renders a monospace run at
+     10px a character, so 600px of room is 60 cells */
+  t.el('cells').clientWidth = 600;
+  t.addTask('two');
+  ok('fills the measured row', cells().length === 60, `${cells().length} cells`);
+  ok('and is all empty while nothing is done', cells() === '·'.repeat(60));
+
+  t.rows()[0].box._l.click.forEach(f => f({ preventDefault(){}, shiftKey:false }));
+  const done = cells().split('').filter(c => c === '█').length;
+  ok('proportion survives the wider bar', done === 30, `${done}/60 filled`);
+
+  /* a narrower panel re-measures instead of keeping the old count */
+  t.el('cells').clientWidth = 300;
+  t.addTask('three');
+  ok('re-measures when the room changes', cells().length === 30, `${cells().length} cells`);
+
+  ok('a resize triggers a repaint',
+     /addEventListener\('resize'[\s\S]{0,120}paintMeter/.test(t.html));
+  ok('a late web font invalidates the measurement',
+     /loadingdone[\s\S]{0,120}cellFit = \{ key:'', per:0 \}/.test(t.html));
+  ok('the count is cached against width and font',
+     /const key = `\$\{room\}\|\$\{state\.settings\.font\}`/.test(t.html));
 }
 
 /* ══ settings kept in this browser ══ */

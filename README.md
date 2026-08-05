@@ -3,7 +3,7 @@
 A single-file daily to-do list. High-contrast, keyboard-driven, and stored as
 plain JSON on your own disk — no account, no server, no dependencies.
 
-**[Open it →](https://USERNAME.github.io/REPO/)**
+**[Open it → sethrzeszutek.github.io/todo.daily](https://sethrzeszutek.github.io/todo.daily/)**
 
 ## How it stores your list
 
@@ -36,7 +36,9 @@ in the app, and `Hints` hides them.
 
 1. Push this folder to a repository.
 2. Settings → Pages → deploy from branch, root of `main`.
-3. Update the link above.
+
+Pages is served from a different origin to `file://`, so a hosted copy starts
+with an empty list — link or import your JSON there.
 
 `todo.json` is gitignored. Keep it that way unless you want your tasks public.
 
