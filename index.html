@@ -1,0 +1,3023 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="retro-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>todo.daily</title>
+
+<script>
+/* Applied before first paint so the saved theme never flashes. Mirrored
+   to a standalone key so it survives even a corrupt document. */
+(function(){
+  try{
+    var ok=['retro-dark','retro-light','modern-dark','modern-light'];
+    var L={dark:'retro-dark',paper:'retro-light',light:'retro-light',modern:'modern-dark'};
+    var t=localStorage.getItem('todo.daily.theme');
+    if(!t){
+      var doc=JSON.parse(localStorage.getItem('todo.daily.v1')||'{}');
+      t=doc&&doc.settings&&doc.settings.theme;
+    }
+    t=L[t]||t;
+    if(ok.indexOf(t)<0){
+      t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)
+        ? 'retro-light' : 'retro-dark';
+    }
+    document.documentElement.dataset.theme=t;
+    // tone overrides too, or the default colours flash first
+    var c=JSON.parse(localStorage.getItem('todo.daily.colors')||'null');
+    if(c){
+      var isDark=/-dark$/.test(t), st=document.documentElement.style;
+      if(c.light) st.setProperty(isDark?'--fg':'--bg', c.light);
+      if(c.dark)  st.setProperty(isDark?'--bg':'--fg', c.dark);
+    }
+  }catch(e){}
+})();
+</script>
+
+<style>
+  /* ═══ theme tokens ═══════════════════════════════════════════════
+     Every visual decision lives here. A theme = one token block,
+     plus (optionally) a short structural block further down.
+     Families share a skeleton via [data-theme^="…"], so a light and
+     dark pair differ only in their colour lines.                  */
+
+  :root{
+    --scan:0;                       /* scanlines are the CRT toggle's job */
+    --mono:'Berkeley Mono','SFMono-Regular','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace;
+    --glyph:'Berkeley Mono','SFMono-Regular','SF Mono',Menlo,'Apple Symbols','Segoe UI Symbol','DejaVu Sans',sans-serif;
+  }
+
+  /* ── retro: analog, resonant, warm ──────────────────────────────── */
+  :root[data-theme^="retro"]{
+    --font:var(--mono);
+    --smooth:none;
+    --page:var(--bg);
+    --panel:var(--bg);
+    --bar-bg:var(--fg);
+    --bar-fg:var(--bg);
+    --edge:var(--fg);
+    --edge-strong:var(--fg);
+    --edge-w:2px;
+    --hair:1px dashed var(--fg);
+    --radius:0;
+    --radius-sm:0;
+    --shadow:6px 6px 0 var(--fg);
+    --chip-shadow:3px 3px 0 var(--fg);
+    --grain:.22;
+    --label-case:uppercase;
+    --label-track:.16em;
+    --title-track:.42em;
+    --body-track:.02em;
+    --press:translate(1px,2px);
+    --chip-press:translate(3px,3px);
+    --chip-press-shadow:0 0 0 var(--fg);
+    --hover-bg:var(--fg);
+    --hover-fg:var(--bg);
+    --row-hover:transparent;
+    --muted:color-mix(in srgb, var(--fg) 62%, var(--bg));
+    --faint:color-mix(in srgb, var(--fg) 40%, var(--bg));
+    --slot:color-mix(in srgb, var(--fg) 30%, var(--bg));
+  }
+  :root[data-theme="retro-dark"] { --bg:#0b0b0b; --fg:#f4f2ec; --scheme:dark;  }
+  :root[data-theme="retro-light"]{ --bg:#f4f2ec; --fg:#0b0b0b; --scheme:light; }
+
+  /* ── modern: brutalist instrument panel ──────────────────────────
+     Same angular bones, decoration stripped, contrast maxed. Pure
+     black/white, 2px structural rules in the foreground colour,
+     dim hairlines between rows. Flat — no grain, no scanlines, no
+     offset shadows. Hard-edged everything.                       */
+  :root[data-theme^="modern"]{
+    --font:var(--mono);
+    --smooth:antialiased;
+    --bar-bg:var(--fg);
+    --bar-fg:var(--bg);
+    --edge:var(--fg);
+    --edge-strong:var(--fg);
+    --edge-w:2px;
+    --radius:0;
+    --radius-sm:0;
+    --shadow:none;
+    --chip-shadow:none;
+    --grain:0;
+    --label-case:uppercase;
+    --label-track:.14em;
+    --title-track:.3em;
+    --body-track:.01em;
+    --press:translate(1px,1px);
+    --chip-press:translate(1px,1px);
+    --chip-press-shadow:none;
+    --hover-bg:var(--fg);
+    --hover-fg:var(--bg);
+    --row-hover:color-mix(in srgb, var(--fg) 7%, var(--bg));
+    --slot:color-mix(in srgb, var(--fg) 24%, var(--bg));
+    /* Derived, not literal: the Colour setting overrides --bg/--fg, and
+       anything hardcoded here would be left stranded behind it. */
+    --page:color-mix(in srgb, var(--bg) 94%, var(--fg));
+    --panel:var(--bg);
+    --hair:1px solid color-mix(in srgb, var(--fg) 16%, var(--bg));
+    --muted:color-mix(in srgb, var(--fg) 69%, var(--bg));
+    --faint:color-mix(in srgb, var(--fg) 45%, var(--bg));
+  }
+  :root[data-theme="modern-dark"] { --bg:#000000; --fg:#fbfcfd; --scheme:dark;  }
+  :root[data-theme="modern-light"]{ --bg:#ffffff; --fg:#000000; --scheme:light; }
+
+  /* Mark colours. A red legible on black is washed out on white and
+     vice versa, so each polarity carries its own ramp. The glyph does
+     the identifying; colour only adds heat. */
+  :root[data-theme$="-dark"]{
+    --m0:#ff5c50; --m1:#ff8b7f; --m2:#f4505c; --m3:#d97f84; --m4:#ffb8b0; --m5:#cf9d9d;
+  }
+  :root[data-theme$="-light"]{
+    --m0:#c00b22; --m1:#9c1420; --m2:#8a1b26; --m3:#7c3034; --m4:#b3403c; --m5:#8c4a4d;
+  }
+  .m0{ color:var(--m0); } .m1{ color:var(--m1); } .m2{ color:var(--m2); }
+  .m3{ color:var(--m3); } .m4{ color:var(--m4); } .m5{ color:var(--m5); }
+
+  /* ── CRT ─────────────────────────────────────────────────────────
+     Each effect is its own switchable layer. All of them are fixed,
+     pointer-events:none overlays — nothing here transforms the document,
+     so a click always lands where it looks. (A real barrel warp needs an
+     SVG displacement filter, which distorts the picture but leaves
+     hit-testing on the flat original, so the pointer would miss.) */
+  :root.crt.crt-scan{ --scan:.30; }
+
+  .fxdef{ position:absolute;width:0;height:0;overflow:hidden; }
+  /* Warped texture, inside the stage so it bows with the picture. Needs its
+     own class rather than sharing .fx, which wins on declaration order at
+     equal specificity. The ellipse mask fades it at the outer rim only, so
+     it never ends in a hard line across the app. */
+  .fxin{
+    position:absolute;inset:-24%;pointer-events:none;z-index:99;display:none;
+    -webkit-mask-image:radial-gradient(ellipse closest-side, #000 78%, transparent 100%);
+    mask-image:radial-gradient(ellipse closest-side, #000 78%, transparent 100%);
+  }
+  :root.crt .fxin{ display:block; }
+  .fxin > span{ position:absolute;inset:0;display:none; }
+  .fx{ position:fixed;inset:0;pointer-events:none;z-index:100;display:none; }
+  :root.crt .fx{ display:block; }
+  .fx > span{ position:absolute;inset:0;display:none; }
+
+  :root.crt.crt-scan .fx-scan{
+    display:block;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,var(--scan)) 0 1px,transparent 1px 3px);
+  }
+
+  :root.crt.crt-vig .fx-vig{
+    display:block;
+    background:
+      radial-gradient(ellipse 112% 100% at 50% 50%, transparent 38%, rgba(0,0,0,.42) 74%, rgba(0,0,0,.80) 100%),
+      radial-gradient(ellipse 140% 130% at 50% 50%, transparent 60%, rgba(0,0,0,.45) 100%);
+  }
+
+  /* The bulge. Gated on .warp-ok, set only once the displacement map has
+     been generated, since the filter with an empty map blanks the UI.
+     Filters do not move hit testing; clicks are remapped in script. */
+  :root.crt.crt-warp.warp-ok #screen{ filter:url(#crt-bulge); }
+
+  /* A soft band drifting down the tube, the way an out-of-sync set rolls */
+  :root.crt.crt-roll .fx-roll{
+    display:block;top:0;height:34%;
+    background:linear-gradient(180deg, transparent,
+      color-mix(in srgb, var(--fg) 5%, transparent) 44%,
+      color-mix(in srgb, var(--fg) 9%, transparent) 50%,
+      color-mix(in srgb, var(--fg) 5%, transparent) 56%, transparent);
+    animation:roll 7s linear infinite;
+  }
+  @keyframes roll{ from{ transform:translateY(-38%) } to{ transform:translateY(300%) } }
+
+  /* and the scanline pattern itself creeps, one line per cycle */
+  :root.crt.crt-roll .fx-scan{ animation:drift 1.3s linear infinite; }
+  @keyframes drift{ from{ background-position:0 0 } to{ background-position:0 3px } }
+
+  /* mains hum: a whole-screen veil breathing a few percent */
+  :root.crt .fx-flick{
+    display:block;background:rgba(0,0,0,.07);opacity:0;
+    animation:hum 7.5s ease-in-out infinite;
+  }
+  @keyframes hum{ 0%,100%{opacity:0} 47%{opacity:1} 50%{opacity:.15} 74%{opacity:.55} }
+
+  /* Text shadows compose instead of competing: each contributor supplies
+     a comma-terminated fragment and the body rule concatenates them, so
+     glow and fringe can both apply without a specificity fight. */
+  :root.crt.crt-fringe{
+    --fringe-sh:-.55px 0 rgba(255,40,80,.34), .55px 0 rgba(40,190,255,.28),;
+  }
+  :root[data-theme$="-dark"].glow{
+    --glow-sh:0 0 8px color-mix(in srgb, currentColor 42%, transparent),;
+  }
+
+  /* ═══ base ═══════════════════════════════════════════════════════ */
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  /* Author rules beat the UA's [hidden]{display:none} no matter the
+     specificity, so any element given `display` (.tray is flex) would
+     ignore the hidden attribute entirely. This restores it. */
+  [hidden]{ display:none !important; }
+  html{ color-scheme:var(--scheme); }
+
+  /* Phosphor bloom is dark-themes-only; it contributes a fragment to the
+     composed text-shadow above rather than owning the property. */
+  :root[data-theme$="-dark"].glow .markcell,
+  :root[data-theme$="-dark"].glow .wmark{ text-shadow:0 0 9px currentColor; }
+  html,body{ height:100%; }
+  body{
+    background:var(--page);
+    color:var(--fg);
+    font-family:var(--font);
+    font-size:15px;
+    line-height:1.45;
+    letter-spacing:var(--body-track);
+    -webkit-font-smoothing:var(--smooth);
+    text-shadow:var(--fringe-sh, ) var(--glow-sh, ) 0 0 transparent;
+    display:block;
+    transition:background .18s ease, color .18s ease;
+  }
+
+  /* Everything the user sees lives in here — app and overlays alike — so
+     the warp filter distorts the finished composite, the way a sheet of
+     curved glass over a tube distorts the picture AND the scanlines on
+     it. Filtering only the panel left the scanlines flat and broke the
+     illusion. */
+  /* The tube is the app, not the browser window, and this box is what the
+     displacement map is normalised to — a stage filling a wide viewport
+     would leave the panel in the map's mild middle and barely curve. The
+     padding is the bezel the overscan crops into. */
+  #screen{
+    position:relative;
+    /* explicit, not fit-content: .shell sizes itself with width:100% +
+       max-width, which cannot resolve against a shrink-to-fit parent and
+       collapses the panel to its intrinsic text width */
+    /* laid out larger when warped; the barrel pulls it back to size */
+    width:min(calc(816px * var(--warp-gain, 1)), 100%);
+    margin:0 auto;
+    display:flex;justify-content:center;
+    padding:34px 40px 60px;
+  }
+
+  body::before{                       /* film grain */
+    content:'';position:fixed;inset:0;pointer-events:none;z-index:98;opacity:var(--grain);
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .shell{ width:100%; max-width:calc(720px * var(--warp-gain, 1)); position:relative; z-index:1; }
+
+  .unit{
+    border:var(--edge-w) solid var(--edge);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    background:var(--panel);
+    overflow:hidden;
+  }
+
+  /* ── title bar ──────────────────────────────────────────────────── */
+  .bar{
+    display:flex;align-items:center;gap:12px;
+    padding:8px 12px;
+    border-bottom:var(--edge-w) solid var(--edge);
+    background:var(--bar-bg);color:var(--bar-fg);
+  }
+  .bar .grip{ letter-spacing:-1px;opacity:.75;flex:none; }
+  .bar h1{
+    font-size:15px;font-weight:700;letter-spacing:var(--title-track);
+    text-transform:var(--label-case);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  /* Lives on the inverted bar, so it borrows the bar's own colours
+     rather than the page's. margin-left:auto pushes it and the lamp to
+     the right edge together. */
+  .bar .barbtn{
+    margin-left:auto;flex:none;
+    color:var(--bar-fg);border:1px solid var(--bar-fg);border-radius:var(--radius-sm);
+    padding:2px 8px;font-size:11px;line-height:1.5;
+    text-transform:var(--label-case);letter-spacing:var(--label-track);
+  }
+  .bar .barbtn:hover,
+  .bar .barbtn[aria-expanded="true"]{ background:var(--bar-fg);color:var(--bar-bg); }
+  .bar .barbtn:active{ transform:var(--press); }
+  .bar .barbtn:focus-visible{ outline:2px solid currentColor;outline-offset:-4px; }
+
+  .bar .lamp{
+    display:flex;align-items:center;gap:7px;
+    font-size:11px;letter-spacing:var(--label-track);text-transform:var(--label-case);
+    white-space:nowrap;
+  }
+  .led{ width:9px;height:9px;border:2px solid var(--bar-fg);border-radius:50%;flex:none; }
+  .led.on{ background:var(--bar-fg);animation:pulse 2.4s steps(2,end) infinite; }
+  @keyframes pulse{ 0%,60%{opacity:1} 61%,100%{opacity:.25} }
+
+  /* ── mode tabs ──────────────────────────────────────────────────── */
+  .modes{ display:flex;border-bottom:var(--edge-w) solid var(--edge); }
+  .tab{
+    flex:1;padding:9px 12px;font-size:11px;
+    text-transform:var(--label-case);letter-spacing:var(--label-track);
+    color:var(--muted);
+  }
+  .tab + .tab{ border-left:var(--edge-w) solid var(--edge); }
+  .tab:hover{ background:var(--row-hover);color:var(--fg); }
+  .tab[aria-pressed="true"]{ background:var(--fg);color:var(--bg); }
+  .tab:active{ transform:var(--press); }
+
+  /* ── date dial ──────────────────────────────────────────────────── */
+  .dial{ display:flex;align-items:stretch;border-bottom:var(--edge-w) solid var(--edge); }
+  .dial .stamp{ flex:1;padding:14px 14px 12px;display:flex;flex-direction:column;gap:2px;min-width:0; }
+  .stamp .dow{ font-size:11px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase; }
+  .stamp .date{ font-size:27px;font-weight:700;letter-spacing:.06em;line-height:1.05;font-variant-numeric:tabular-nums; }
+  .stamp .rel{ font-size:11px;letter-spacing:var(--label-track);color:var(--muted);text-transform:var(--label-case);height:16px; }
+  .dial .nav{ display:flex;border-left:var(--edge-w) solid var(--edge); }
+
+  /* ── controls ───────────────────────────────────────────────────── */
+  button{
+    font:inherit;letter-spacing:var(--label-track);color:var(--fg);background:transparent;
+    border:0;cursor:pointer;-webkit-user-select:none;user-select:none;
+    transition:transform .05s ease, background .12s ease, color .12s ease, border-color .12s ease;
+  }
+  /* currentColor, not --fg: a pressed chip is filled with --fg and its
+     text is --bg, so an --fg ring would be invisible on it. currentColor
+     inverts with the control, so the ring reads on both states. */
+  button:focus-visible{ outline:2px solid currentColor;outline-offset:-4px; }
+
+  .key{
+    border-left:var(--edge-w) solid var(--edge);
+    padding:0 15px;min-width:46px;font-size:16px;display:grid;place-items:center;
+  }
+  .dial .nav .key:first-child{ border-left:0; }
+  .key:hover{ background:var(--hover-bg);color:var(--hover-fg); }
+  .key:active{ background:var(--hover-bg);color:var(--hover-fg);transform:var(--press); }
+
+  .chip{
+    border:var(--edge-w) solid var(--edge-strong);
+    border-radius:var(--radius-sm);
+    box-shadow:var(--chip-shadow);
+    background:var(--panel);
+    padding:5px 11px;font-size:11px;text-transform:var(--label-case);
+  }
+  .chip:hover{ background:var(--hover-bg);color:var(--hover-fg); }
+  .chip:active{ transform:var(--chip-press);box-shadow:var(--chip-press-shadow); }
+  .chip[aria-pressed="true"]{ background:var(--fg);color:var(--bg);border-color:var(--fg); }
+  .chip:disabled{ opacity:.35;cursor:not-allowed;transform:none;box-shadow:var(--chip-shadow); }
+
+  .seg{ display:flex;gap:8px;flex-wrap:wrap; }
+
+  /* ── progress ───────────────────────────────────────────────────── */
+  .meter{
+    display:flex;align-items:center;gap:12px;
+    padding:9px 14px;border-bottom:var(--edge-w) solid var(--edge);
+    font-size:12px;letter-spacing:var(--label-track);text-transform:var(--label-case);
+  }
+  .meter .cells{ flex:1;letter-spacing:-.06em;font-size:15px;overflow:hidden;white-space:nowrap;font-family:var(--mono); }
+  .meter .track{ display:none;flex:1;height:6px;background:var(--edge);overflow:hidden; }
+  .meter .track .fill{ display:block;height:100%;background:var(--fg);transition:width .22s ease; }
+  .meter .cnt{ color:var(--muted);font-variant-numeric:tabular-nums; }
+
+  /* ── section headers ────────────────────────────────────────────── */
+  .sect{
+    display:flex;align-items:center;gap:12px;
+    padding:8px 14px;
+    border-bottom:var(--edge-w) solid var(--edge);
+    font-size:11px;letter-spacing:var(--label-track);text-transform:var(--label-case);
+  }
+  .sect + .sect{ border-top:0; }
+  .sect .st{ font-weight:700; }
+  .sect .sn{ margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums; }
+  .sect .sr{ color:var(--muted);text-transform:none;letter-spacing:var(--body-track); }
+
+  /* ── rows ───────────────────────────────────────────────────────── */
+  ul{ list-style:none; }
+  li{ display:flex;align-items:flex-start;border-bottom:var(--hair);position:relative; }
+
+  /* Sweep: a stepped band of light down the open rows. An overlay rather
+     than a background, so hover and selection survive underneath. The tint
+     is var(--fg), which lightens on dark themes and darkens on light ones.
+     Each row's phase comes from --sweep, set inline, to keep the wave
+     continuous across repaints. */
+  li.open::before{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:var(--fg);opacity:0;
+  }
+  :root.sweep li.open::before{
+    animation:sweep 5.5s steps(1,end) infinite;
+    animation-delay:var(--sweep, 0s);
+  }
+  /* Six discrete steps, each 4% of the 5.5s cycle — 0.22s, matching
+     SWEEP_STEP, so consecutive rows sit on consecutive steps and the
+     band reads as a hard-edged comet rather than a smear. Dark from 20%
+     to 100%: a ~4.4s rest, which is what keeps the pass feeling like a
+     deliberate machine sweep instead of a shimmer. */
+  @keyframes sweep{
+    0%   { opacity:.26 }
+    4%   { opacity:.185 }
+    8%   { opacity:.12 }
+    12%  { opacity:.07 }
+    16%  { opacity:.032 }
+    20%  { opacity:0 }
+    100% { opacity:0 }
+  }
+  li:last-child{ border-bottom:0; }
+  li:hover{ background:var(--row-hover); }
+
+  /* keyboard cursor: a bar down the left edge of whichever row holds focus */
+  li:focus-within{ background:var(--row-hover);box-shadow:inset 3px 0 0 currentColor; }
+  li.sel{ background:color-mix(in srgb, var(--fg) 13%, var(--bg));box-shadow:inset 4px 0 0 var(--fg); }
+  li.sel:focus-within{
+    box-shadow:inset 4px 0 0 var(--fg),
+               inset 0 0 0 2px color-mix(in srgb, var(--fg) 28%, transparent);
+  }
+  .wday:focus-within{ background:var(--row-hover); }
+  .wt:focus-visible,.wdh:focus-visible{ outline-offset:-3px; }
+
+  .idx{ display:none; }
+
+  .box{ padding:11px 10px 11px 14px;font-size:15px;letter-spacing:0;align-self:stretch;display:flex;align-items:center;font-family:var(--mono); }
+  .box .mark{ display:inline-grid;place-items:center;min-width:1ch;font-weight:400; }
+  .box:hover{ background:var(--hover-bg);color:var(--hover-fg); }
+  .box:active{ transform:var(--press); }
+
+  .txt{ flex:1;padding:11px 8px 11px 2px;min-width:0;cursor:text;word-break:break-word; }
+  li.done .txt{ color:var(--faint);text-decoration:line-through;text-decoration-thickness:2px; }
+  .txt input{
+    font:inherit;color:var(--fg);background:transparent;
+    border:0;border-bottom:var(--edge-w) solid var(--fg);
+    width:100%;padding:0 0 2px;letter-spacing:inherit;
+  }
+  .txt input:focus{ outline:0; }
+
+  .when{
+    align-self:center;padding:0 12px;flex:none;
+    font-size:11px;letter-spacing:.06em;color:var(--muted);
+    text-transform:uppercase;white-space:nowrap;font-variant-numeric:tabular-nums;
+  }
+  li.done .when{ color:var(--faint); }
+  .when.over{ font-weight:700;color:var(--fg); }
+
+  /* ── marks ──────────────────────────────────────────────────────
+     The only colour in the app. A fixed set of glyphs, each in its own
+     red from the ramp, so a row's meaning reads at a glance without a
+     word attached. The legend in the config drawer maps them.      */
+  .markcell{
+    align-self:center;flex:none;
+    width:40px;text-align:center;font-size:20px;line-height:1;
+    padding:3px 0;font-family:var(--glyph);
+    border:var(--edge-w) solid transparent;
+  }
+  .markcell:hover{ border-color:var(--edge-strong); }
+  .markcell:active{ transform:var(--press); }
+  .markcell.none{ color:var(--faint);opacity:0;font-size:14px; }
+  li:hover .markcell.none,li:focus-within .markcell.none,
+  .markcell.none:focus-visible{ opacity:1; }
+  .wmark{ flex:none;align-self:center;font-family:var(--glyph);width:1.3em;text-align:center;font-size:15px; }
+
+  .cpick{
+    display:flex;align-items:center;gap:7px;
+    font-size:11px;letter-spacing:var(--label-track);text-transform:var(--label-case);
+    color:var(--muted);
+  }
+  .cpick input[type="color"]{
+    width:34px;height:22px;padding:0;flex:none;cursor:pointer;
+    border:var(--edge-w) solid var(--edge-strong);border-radius:var(--radius-sm);
+    background:transparent;
+  }
+  .cpick input[type="color"]:focus-visible{ outline:2px solid currentColor;outline-offset:2px; }
+
+  /* A switch and its amount as one control: the chip border wraps both,
+     so the slider reads as part of the button rather than floating beside
+     it. ←/→ adjust a range natively, so horizontal grid navigation steps
+     aside for it; ↑/↓ still move between lines. */
+  .chipgroup{
+    display:flex;align-items:center;gap:8px;flex:none;
+    border:var(--edge-w) solid var(--edge-strong);border-radius:var(--radius-sm);
+    box-shadow:var(--chip-shadow);background:var(--panel);
+    padding-right:9px;
+  }
+  .chipgroup .chip-in{
+    padding:5px 9px;font-size:11px;
+    text-transform:var(--label-case);letter-spacing:var(--label-track);
+    border-right:var(--edge-w) solid var(--edge-strong);
+  }
+  .chipgroup .chip-in:hover{ background:var(--hover-bg);color:var(--hover-fg); }
+  .chipgroup .chip-in:active{ transform:var(--press); }
+  .chipgroup .chip-in[aria-pressed="true"]{ background:var(--fg);color:var(--bg); }
+  .chipgroup .chip-in:disabled{ opacity:.35;cursor:not-allowed; }
+  .chipgroup .lvl{ font-variant-numeric:tabular-nums;min-width:1ch;color:var(--fg); }
+
+  .rng{
+    -webkit-appearance:none;appearance:none;
+    width:66px;height:16px;flex:none;background:transparent;cursor:pointer;
+  }
+  .rng::-webkit-slider-runnable-track{ height:2px;background:var(--edge-strong); }
+  .rng::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:9px;height:15px;margin-top:-7px;border:0;border-radius:var(--radius-sm);
+    background:var(--fg);
+  }
+  .rng:focus-visible{ outline:2px solid currentColor;outline-offset:2px; }
+  .rng:disabled{ opacity:.35;cursor:not-allowed; }
+
+  /* legend */
+  .legend{ display:flex;flex-wrap:wrap;gap:6px 16px;flex:1; }
+  .legend .lg{
+    display:flex;align-items:center;gap:7px;
+    font-size:11px;letter-spacing:var(--label-track);text-transform:var(--label-case);
+    color:var(--muted);white-space:nowrap;
+  }
+  .legend .lg b{ color:var(--faint);font-weight:400;font-variant-numeric:tabular-nums; }
+  .legend .lg i{ font-style:normal;font-size:17px;line-height:1;font-family:var(--glyph);width:1.2em;text-align:center; }
+
+  .kill{ align-self:stretch;padding:0 14px;font-size:13px;opacity:0;border-left:var(--hair);color:var(--muted); }
+  li:hover .kill,.kill:focus-visible{ opacity:1; }
+  .kill:hover{ background:var(--hover-bg);color:var(--hover-fg); }
+  .kill:active{ transform:var(--press); }
+
+  .void{ padding:26px 16px;text-align:center;font-size:12px;letter-spacing:var(--label-track);color:var(--faint);text-transform:var(--label-case);width:100%; }
+
+  /* ── entry ──────────────────────────────────────────────────────── */
+  .entry{ display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:var(--edge-w) solid var(--edge); }
+  .entry .caret{ font-weight:700;font-family:var(--mono);flex:none; }
+  .entry input{ flex:1;font:inherit;color:var(--fg);background:transparent;border:0;padding:4px 0;min-width:0; }
+  .entry input:focus{ outline:0; }
+  .entry input::placeholder{ color:var(--faint);opacity:1; }
+  .cursor{ width:9px;height:17px;background:var(--fg);animation:blink 1.06s steps(2,end) infinite;flex:none; }
+  @keyframes blink{ 0%,50%{opacity:1} 51%,100%{opacity:0} }
+
+  /* ── goal form ──────────────────────────────────────────────────── */
+  .gform{ border-top:var(--edge-w) solid var(--edge);padding:12px 14px;display:flex;flex-direction:column;gap:10px; }
+  .grow{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+  .grow.text{ flex-wrap:nowrap; }
+  .gform input[type="text"]{ flex:1;font:inherit;color:var(--fg);background:transparent;border:0;padding:4px 0;min-width:0;letter-spacing:inherit; }
+  .gform input[type="text"]:focus{ outline:0; }
+  .gform input[type="text"]::placeholder{ color:var(--faint);opacity:1; }
+  .gform label{
+    display:flex;align-items:center;gap:7px;
+    font-size:11px;letter-spacing:var(--label-track);text-transform:var(--label-case);color:var(--muted);
+  }
+  .gform input[type="date"]{
+    font:inherit;font-size:13px;color:var(--fg);background:transparent;
+    border:var(--edge-w) solid var(--edge-strong);border-radius:var(--radius-sm);
+    padding:3px 6px;letter-spacing:var(--body-track);
+  }
+  .gform input[type="date"]:focus{ outline:2px solid var(--fg);outline-offset:1px; }
+  .gform .req{ color:var(--fg);font-weight:700; }
+  .gerr{
+    font-size:11px;letter-spacing:var(--label-track);text-transform:var(--label-case);
+    border:var(--edge-w) solid var(--fg);padding:6px 9px;
+  }
+
+  /* ── week breakdown ─────────────────────────────────────────────── */
+  .wday{ border-bottom:var(--hair); }
+  .wday:last-child{ border-bottom:0; }
+  .wday.today{ background:var(--row-hover); }
+  .wdh{
+    display:flex;align-items:center;gap:12px;width:100%;
+    padding:9px 14px;font-size:11px;
+    letter-spacing:var(--label-track);text-transform:var(--label-case);
+  }
+  .wdh:hover{ background:var(--hover-bg);color:var(--hover-fg); }
+  .wdh:active{ transform:var(--press); }
+  .wdh .wd{ font-weight:700;min-width:3.5ch; }
+  .wdh .wdt{ color:var(--muted);font-variant-numeric:tabular-nums; }
+  .wdh:hover .wdt,.wdh:hover .wdc{ color:inherit; }
+  .wdh .wcells{ flex:1;letter-spacing:-.06em;font-size:14px;font-family:var(--mono);overflow:hidden;white-space:nowrap;text-align:right; }
+  .wdh .wdc{ color:var(--muted);font-variant-numeric:tabular-nums; }
+  .wtasks{ padding:0 14px 9px 14px;display:flex;flex-direction:column;gap:1px; }
+  .wt{
+    display:flex;align-items:flex-start;gap:9px;width:100%;
+    padding:3px 4px;font-size:13px;letter-spacing:var(--body-track);
+    text-transform:none;text-align:left;
+  }
+  .wt:hover{ background:var(--hover-bg);color:var(--hover-fg); }
+  .wt:active{ transform:var(--press); }
+  .wt .wm{ font-family:var(--mono);flex:none; }
+  .wt .wx{ flex:1;word-break:break-word; }
+  .wt.done .wx{ color:var(--faint);text-decoration:line-through; }
+  .wt.done:hover .wx{ color:inherit; }
+  .wnone{ padding:2px 4px 4px;font-size:11px;color:var(--faint);letter-spacing:var(--label-track);text-transform:var(--label-case); }
+
+  /* ── trays ──────────────────────────────────────────────────────── */
+  .tray{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:9px 14px;border-top:var(--edge-w) solid var(--edge);
+    font-size:11px;letter-spacing:var(--label-track);text-transform:var(--label-case);
+  }
+  .tray .msg{ flex:1;min-width:160px;color:var(--muted);text-transform:none;letter-spacing:var(--body-track);font-size:12px; }
+
+  /* ── deck ───────────────────────────────────────────────────────── */
+  #config{ border-top:var(--edge-w) solid var(--edge); }
+  .deck .row{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;
+    font-size:11px;letter-spacing:var(--label-track);text-transform:var(--label-case);
+  }
+  .deck .row + .row{ border-top:var(--hair); }
+  .deck .status{ flex:1;min-width:170px;display:flex;align-items:center;gap:9px;overflow:hidden; }
+  .deck .status .txtline{ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:var(--body-track);text-transform:none; }
+  .deck .status .dim{ color:var(--muted); }
+  .deck .lbl{ color:var(--muted);flex:none; }
+
+  .note{ margin-top:14px;font-size:11px;letter-spacing:var(--label-track);line-height:1.7;color:var(--faint);text-transform:var(--label-case); }
+  .note kbd{ font:inherit;border:1px solid currentColor;border-radius:var(--radius-sm);padding:0 4px; }
+
+  /* ═══ modern structural additions ════════════════════════════════
+     The modern family KEEPS the retro skeleton — [x] brackets, prompt
+     caret, blinking cursor, solid status bar, square corners. What it
+     adds is instrumentation: channel numbers per row, a segmented LED
+     meter, a hazard-stripe block, a SYS readout.                  */
+  :root[data-theme^="modern"] .bar{ padding:6px 12px; }
+  :root[data-theme^="modern"] .bar h1{ font-size:13px; }
+  :root[data-theme^="modern"] .stamp{ padding:12px 14px 10px; }
+  :root[data-theme^="modern"] .stamp .date{ font-weight:700;letter-spacing:.02em; }
+  :root[data-theme^="modern"] .stamp .dow{ letter-spacing:.2em; }
+  :root[data-theme^="modern"] .meter{ padding:8px 14px; }
+  :root[data-theme^="modern"] .key{ font-size:13px; }
+  :root[data-theme^="modern"] .box{ padding:10px 10px 10px 11px; }
+  :root[data-theme^="modern"] .tray,
+  :root[data-theme^="modern"] .deck .row{ padding:9px 14px; }
+
+  /* hazard stripes in place of the retro grip */
+  :root[data-theme^="modern"] .bar .grip{
+    font-size:0;width:26px;height:11px;opacity:1;
+    border:1px solid var(--bar-fg);
+    background:repeating-linear-gradient(45deg,var(--bar-fg) 0 2px,transparent 2px 5px);
+  }
+  /* instrument readout prefix */
+  :root[data-theme^="modern"] .bar .lamp::before{ content:'sys';color:var(--bar-fg);opacity:.65; }
+
+  /* channel numbers */
+  :root[data-theme^="modern"] .idx{
+    display:flex;align-items:center;align-self:stretch;
+    padding:0 9px 0 12px;
+    font-size:11px;letter-spacing:.08em;color:var(--faint);
+    border-right:var(--hair);font-variant-numeric:tabular-nums;
+  }
+
+  /* segmented LED meter replaces the character cells */
+  :root[data-theme^="modern"] .meter .cells{ display:none; }
+  :root[data-theme^="modern"] .meter .track{
+    display:block;height:16px;padding:2px;overflow:hidden;
+    border:2px solid var(--edge-strong);background:transparent;
+    background-image:repeating-linear-gradient(90deg,var(--slot) 0 5px,transparent 5px 8px);
+    background-origin:content-box;background-clip:content-box;
+  }
+  :root[data-theme^="modern"] .meter .track .fill{
+    background:repeating-linear-gradient(90deg,var(--fg) 0 5px,transparent 5px 8px);
+  }
+
+  @media (max-width:560px){
+    .stamp .date{ font-size:21px; }
+    :root[data-theme^="retro"] .bar h1{ letter-spacing:.24em; }
+    :root[data-theme^="modern"] .bar h1{ letter-spacing:.18em; }
+    .wdh .wcells{ display:none; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .led.on,.cursor,:root.sweep li.open::before,
+    :root.crt.crt-roll .fx-scan,:root.crt .fx-flick,:root.crt.crt-roll .fx-roll{ animation:none; }
+    *{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="screen">
+<div class="shell">
+
+  <main class="unit">
+    <div class="bar">
+      <span class="grip" aria-hidden="true">▚▚▚</span>
+      <h1>todo.daily</h1>
+      <button class="barbtn" id="cfgBtn" aria-expanded="false" aria-controls="config">⚙ Config</button>
+      <span class="lamp"><span class="led on" id="led" aria-hidden="true"></span><span id="lampTxt">live</span></span>
+    </div>
+
+    <div class="modes">
+      <button class="tab" id="tabDay"  data-mode="day"  aria-pressed="true">Day</button>
+      <button class="tab" id="tabWeek" data-mode="week" aria-pressed="false">Week</button>
+    </div>
+
+    <div class="dial">
+      <div class="stamp">
+        <span class="dow" id="dow">—</span>
+        <span class="date" id="date">0000-00-00</span>
+        <span class="rel" id="rel"></span>
+      </div>
+      <div class="nav">
+        <button class="key" id="prev" title="Previous (Alt+←)" aria-label="Previous">◀</button>
+        <button class="key" id="today" title="Jump to today" aria-label="Today">●</button>
+        <button class="key" id="next" title="Next (Alt+→)" aria-label="Next">▶</button>
+      </div>
+    </div>
+
+    <!-- ── day view ────────────────────────────────────────────── -->
+    <div id="dayView">
+      <div class="meter">
+        <span>Progress</span>
+        <span class="cells" id="cells" aria-hidden="true"></span>
+        <span class="track" aria-hidden="true"><span class="fill" id="fill" style="width:0"></span></span>
+        <span class="cnt" id="cnt">00/00</span>
+      </div>
+
+      <ul id="list"></ul>
+
+      <form class="entry" id="entry" autocomplete="off" onsubmit="return false">
+        <span class="caret" aria-hidden="true">&gt;</span>
+        <input id="input" placeholder="New task…" aria-label="New task" maxlength="400">
+        <span class="cursor" id="cursor" aria-hidden="true"></span>
+      </form>
+    </div>
+
+    <!-- ── week view ───────────────────────────────────────────── -->
+    <div id="weekView" hidden>
+      <div class="sect">
+        <span class="st">Goals</span>
+        <span class="sr" id="goalRange"></span>
+        <span class="sn" id="goalCnt">00/00</span>
+      </div>
+
+      <ul id="goalList"></ul>
+
+      <!-- novalidate: validation lives in addGoal() so the error message can
+           name the missing field instead of showing a generic browser bubble -->
+      <form class="gform" id="goalForm" autocomplete="off" novalidate onsubmit="return false">
+        <div class="grow text">
+          <span class="caret" aria-hidden="true">&gt;</span>
+          <input type="text" id="goalText" placeholder="Weekly goal…" aria-label="Goal" maxlength="200">
+        </div>
+        <div class="grow">
+          <label>From <span class="req" aria-hidden="true">*</span>
+            <input type="date" id="goalStart" aria-label="Goal start date">
+          </label>
+          <label>To
+            <input type="date" id="goalEnd" aria-label="Goal end date (optional)">
+          </label>
+          <button class="chip" type="submit" id="goalAdd">+ Add goal</button>
+        </div>
+        <p class="gerr" id="goalErr" hidden role="alert"></p>
+      </form>
+
+      <div class="sect" style="border-top:var(--edge-w) solid var(--edge)">
+        <span class="st">Days</span>
+        <span class="sr" id="weekDone"></span>
+        <span class="sn" id="weekCnt">00/00</span>
+      </div>
+
+      <div id="weekDays"></div>
+    </div>
+
+    <div class="tray" id="selTray" hidden>
+      <span class="msg" id="selMsg"></span>
+      <button class="chip" id="selBtn">Carry →</button>
+    </div>
+
+    <div class="tray" id="carryTray" hidden>
+      <span class="msg" id="carryMsg"></span>
+      <button class="chip" id="carryBtn">Carry over ▲</button>
+    </div>
+
+    <div class="tray" id="undoTray" hidden>
+      <span class="msg" id="undoMsg"></span>
+      <button class="chip" id="undoBtn">Undo ↺</button>
+    </div>
+
+    <!-- Inside the panel, so the warp covers the whole UI rather than
+         stopping at the task list. The cost is real and accepted: SVG
+         filters are not accounted for in hit testing, so at high warp these
+         controls answer clicks tens of px from where they paint. The
+         keyboard is exact (it works off layout), and the fixed corner gear
+         closes the drawer. Both alternatives were worse — flattening the
+         warp while the drawer is open switched the effect off exactly when
+         you were adjusting its own slider, and moving the drawer out left
+         the warp covering only half the interface. -->
+    <div class="deck" id="config" hidden>
+      <div class="row">
+        <span class="status">
+          <span aria-hidden="true" id="fileGlyph">◇</span>
+          <span class="txtline" id="fileTxt">Not linked — local only</span>
+          <span class="dim txtline" id="saveTxt"></span>
+        </span>
+        <button class="chip" id="openBtn" title="Link an existing todo.json — contents are preserved">◆ Open JSON</button>
+        <button class="chip" id="newBtn" title="Create a new todo.json — replaces the file if it already exists">+ New JSON</button>
+        <button class="chip" id="grantBtn" hidden>◆ Allow writing</button>
+        <button class="chip" id="unlinkBtn" hidden>Unlink</button>
+        <button class="chip" id="importBtn"
+                title="Merge items from a JSON file — keeps what you already have">Import ↑</button>
+        <button class="chip" id="dlBtn">Export ↓</button>
+      </div>
+
+      <div class="row">
+        <span class="lbl">Rollover</span>
+        <div class="seg">
+          <button class="chip" id="autoBtn" aria-pressed="true"
+                  title="Move anything still unfinished onto today when the app opens">Auto ●</button>
+        </div>
+        <span class="status"><span class="txtline dim" id="autoTxt"></span></span>
+      </div>
+
+      <div class="row">
+        <span class="lbl">Marks</span>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="row">
+        <span class="lbl">Colour</span>
+        <div class="seg">
+          <label class="cpick">Light <input type="color" id="colLight" aria-label="Light tone"></label>
+          <label class="cpick">Dark <input type="color" id="colDark" aria-label="Dark tone"></label>
+          <label class="cpick">Marks <input type="color" id="colMark" aria-label="Mark hue"></label>
+          <button class="chip" id="colReset" title="Back to the theme's own colours">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="lbl">Font</span>
+        <div class="seg" id="fontSeg" role="group" aria-label="Font"></div>
+      </div>
+
+      <div class="row">
+        <span class="lbl">Theme</span>
+        <div class="seg" id="themeSeg" role="group" aria-label="Theme"></div>
+      </div>
+
+      <div class="row">
+        <span class="lbl">Display</span>
+        <div class="seg">
+          <button class="chip" id="glowBtn" aria-pressed="false"
+                  title="Slight glow around text — dark themes only">Glow ○</button>
+          <button class="chip" id="sweepBtn" aria-pressed="true"
+                  title="Stepped light sweeping through unfinished rows">Sweep ●</button>
+          <button class="chip" id="hintsBtn" aria-pressed="true"
+                  title="Show the keyboard shortcut line">Hints ●</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="lbl">CRT</span>
+        <div class="seg">
+          <button class="chip" id="crtBtn" aria-pressed="false"
+                  title="Master switch for the tube effects">On ○</button>
+          <button class="chip" id="crtScanBtn" aria-pressed="true">Scanlines ●</button>
+          <button class="chip" id="crtRollBtn" aria-pressed="false"
+                  title="Scanlines creep and a soft band rolls down the tube">Roll ○</button>
+          <span class="chipgroup">
+            <button class="chip-in" id="crtWarpBtn" aria-pressed="false"
+                    title="Bulge the picture like curved tube glass">Warp ○</button>
+            <input class="rng" type="range" id="warpRange" min="1" max="5" step="1"
+                   title="How far the glass bulges. Pointer targets drift further from their painted position as it rises."
+                   aria-label="Warp amount, 1 to 5">
+            <span class="lvl" id="warpVal">3</span>
+          </span>
+          <button class="chip" id="crtVigBtn" aria-pressed="true">Vignette ●</button>
+          <button class="chip" id="crtFringeBtn" aria-pressed="true"
+                  title="Red/cyan colour fringing on text">Fringe ●</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="status"><span class="txtline dim" id="hint">Writes on every keystroke</span></span>
+        <div class="seg">
+          <button class="chip" id="sndBtn" aria-pressed="true">Sound ●</button>
+          <button class="chip" id="keysBtn" aria-pressed="true">Keys ●</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <!-- rebuilt per platform on boot; this is the no-JS fallback -->
+  <p class="note" id="note">
+    <kbd>Enter</kbd> add · <kbd>click</kbd> toggle · <kbd>click text</kbd> edit ·
+    <kbd>Alt+←</kbd>/<kbd>Alt+→</kbd> back / forward · <kbd>Alt+W</kbd> day / week ·
+    <kbd>Alt+T</kbd> theme · <kbd>Esc</kbd> cancel
+  </p>
+</div><!-- /.shell -->
+  <div class="fxin" aria-hidden="true">
+    <span class="fx-scan"></span>
+    <span class="fx-roll"></span>
+  </div>
+</div><!-- /#screen -->
+  <div class="fx" aria-hidden="true">
+    <span class="fx-vig"></span>
+    <span class="fx-flick"></span>
+  </div>
+
+<svg class="fxdef" width="0" height="0" aria-hidden="true" focusable="false">
+  <!-- Barrel displacement. The map is drawn on a canvas at runtime: R
+       encodes horizontal offset, G vertical, both growing with r². Kept
+       outside #screen so the definition is not itself filtered. -->
+  <filter id="crt-bulge" x="-25%" y="-25%" width="150%" height="150%"
+          color-interpolation-filters="sRGB">
+    <feImage id="crt-bulge-map" preserveAspectRatio="none" result="map"/>
+    <feDisplacementMap id="crt-bulge-disp" in="SourceGraphic" in2="map" scale="0"
+                       xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<script>
+(() => {
+'use strict';
+
+/* ══ themes ════════════════════════════════════════════════════════
+   Adding a theme = one entry here + one token block in the CSS.   */
+const THEMES = [
+  { id:'retro-dark',   label:'Retro dark',   sfx:'tactile' },
+  { id:'retro-light',  label:'Retro light',  sfx:'tactile' },
+  { id:'modern-dark',  label:'Modern dark',  sfx:'crisp'   },
+  { id:'modern-light', label:'Modern light', sfx:'crisp'   }
+];
+const THEME_IDS = THEMES.map(t => t.id);
+
+/* Fonts. `stack` null means "use the theme's own token". The two Google
+   families are fetched only when actually selected, so the default costs
+   no network request; if the fetch fails the stack falls back to --mono. */
+const FONTS = [
+  { id:'mono',      label:'Default',    stack:null },
+  { id:'helvetica', label:'Helvetica',  stack:"'Helvetica Neue',Helvetica,Arial,sans-serif" },
+  { id:'space',     label:'Space Mono', stack:"'Space Mono',var(--mono)",
+    url:'https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap' },
+  { id:'plex',      label:'IBM Plex',   stack:"'IBM Plex Mono',var(--mono)",
+    url:'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap' }
+];
+const FONT_IDS = FONTS.map(f => f.id);
+const LEGACY = { dark:'retro-dark', paper:'retro-light', light:'retro-light', modern:'modern-dark' };
+const THEME_KEY = 'todo.daily.theme';
+const DEFAULT_THEME = () =>
+  window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+    ? 'retro-light' : 'retro-dark';
+
+/* ══ clicky audio ══════════════════════════════════════════════════
+   Every sound is synthesised — no assets. Each click is three layers:
+   a short band-passed noise burst (the plate), an even shorter burst
+   an octave up (the top transient, which is what the ear reads as
+   "click"), and a fast sine thump (the body). Sharp attack, tiny
+   durations. Themes pick a profile; the modern skins run drier.  */
+const Sfx = (() => {
+  let ctx = null, buf = null;
+  const PROFILES = {
+    tactile:{ gain:1,   dur:1,   freq:1,    body:1   },  // analog, resonant
+    crisp:  { gain:.92, dur:.72, freq:1.12, body:.55 }   // dry, short, no ring
+  };
+  let p = PROFILES.tactile;
+
+  const ac = () => {
+    if (!ctx) {
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return null;
+      ctx = new C();
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  };
+  const noise = c => {
+    if (!buf) {
+      const n = Math.floor(c.sampleRate * 0.3);
+      buf = c.createBuffer(1, n, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    }
+    return buf;
+  };
+
+  function plate(c, t, o){
+    const s = c.createBufferSource();
+    s.buffer = noise(c);
+    s.playbackRate.value = 0.85 + Math.random() * 0.3;      // per-hit variance
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = o.freq * p.freq;
+    bp.Q.value = o.q;
+    const dur = o.dur * p.dur;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(o.gain * p.gain, t + 0.0006);   // sharp attack
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(bp).connect(g).connect(c.destination);
+    s.start(t, Math.random() * 0.2);
+    s.stop(t + dur + 0.02);
+  }
+
+  function body(c, t, o){
+    const dur = o.dur * p.dur;
+    const os = c.createOscillator();
+    os.type = 'sine';
+    os.frequency.setValueAtTime(o.freq, t);
+    os.frequency.exponentialRampToValueAtTime(o.freq * 0.55, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(o.gain * p.gain * p.body, t + 0.0015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    os.connect(g).connect(c.destination);
+    os.start(t); os.stop(t + dur + 0.02);
+  }
+
+  /* Completion: a short ascending arpeggio on *detuned square* waves
+     through a lowpass — buzzy and warm rather than bell-clean. Two
+     oscillators a few cents apart beat against each other, which is
+     what gives it the buzz; the filter keeps the square's upper
+     harmonics from getting shrill. The last note holds with a light
+     tremolo so the phrase lands instead of just stopping. */
+  function buzz(delay, freq, gain, dur, tremolo){
+    const c = ac(); if (!c) return;
+    const t = c.currentTime + delay;
+    const d = dur * p.dur;
+    const peak = gain * p.gain;
+
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2300;
+    lp.Q.value = 0.9;
+
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.008);       // fast, not clicky
+    g.gain.setValueAtTime(peak, t + d * 0.55);             // brief plateau
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    lp.connect(g).connect(c.destination);
+
+    for (const cents of [1, 1.004]) {                      // ~7 cents apart
+      const o = c.createOscillator();
+      o.type = 'square';
+      o.frequency.value = freq * cents;
+      o.connect(lp);
+      o.start(t); o.stop(t + d + 0.02);
+    }
+
+    if (tremolo) {
+      const lfo = c.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 19;
+      const depth = c.createGain();
+      depth.gain.value = peak * 0.32;
+      lfo.connect(depth).connect(g.gain);
+      lfo.start(t); lfo.stop(t + d + 0.02);
+    }
+  }
+
+  /* one click = plate + top transient + optional body */
+  function click(delay, o){
+    const c = ac(); if (!c) return;
+    const t = c.currentTime + delay;
+    const { gain=.10, freq=3400, q=.7, dur=.014,
+            bGain=.035, bFreq=320, bDur=.018 } = o || {};
+    plate(c, t, { gain, freq, q, dur });
+    plate(c, t, { gain:gain * .5, freq:freq * 2.05, q:.5, dur:.005 });
+    if (bGain) body(c, t, { gain:bGain, freq:bFreq, dur:bDur });
+  }
+
+  return {
+    unlock(){ ac(); },
+    profile(name){ p = PROFILES[name] || PROFILES.tactile; },
+    tap(){     click(0, {}); },
+    key(){     click(0, {gain:.055,freq:3800,dur:.008,bGain:.016,bFreq:380,bDur:.010}); },
+    ret(){     click(0, {gain:.14,freq:2700,q:.65,dur:.020,bGain:.080,bFreq:200,bDur:.032}); },
+    check(){   click(0,    {gain:.14,freq:4300,dur:.012,bGain:.030,bFreq:340,bDur:.014});
+               click(.045, {gain:.09,freq:3100,dur:.010,bGain:.020,bFreq:280,bDur:.012}); },
+    uncheck(){ click(0, {gain:.10,freq:2100,q:.9,dur:.018,bGain:.050,bFreq:190,bDur:.026}); },
+    del(){     click(0, {gain:.12,freq:1500,q:.55,dur:.028,bGain:.100,bFreq:120,bDur:.050}); },
+    flip(){    click(0,   {gain:.16,freq:3700,dur:.015,bGain:.045,bFreq:250,bDur:.020});
+               click(.03, {gain:.085,freq:2500,dur:.011,bGain:0}); },
+    nav(){     click(0, {gain:.130,freq:2600,q:.90,dur:.016,bGain:.055,bFreq:240,bDur:.022}); },
+    /* moving the keyboard cursor — fires often, so barely there */
+    move(){    click(0, {gain:.038,freq:4400,dur:.006,bGain:.012,bFreq:430,bDur:.008}); },
+    /* one notch of a slider */
+    tick(){    click(0, {gain:.085,freq:3200,q:1.2,dur:.010,bGain:.030,bFreq:300,bDur:.012}); },
+    /* Day complete: a G-major arpeggio resolving on the octave, offset
+       so it starts after the checkbox clack. Square waves read louder
+       than sines at the same gain, hence the low numbers. */
+    done(){    buzz(.10,  392, .050, .07);
+               buzz(.155, 523, .055, .07);
+               buzz(.21,  659, .060, .08);
+               buzz(.275, 784, .070, .26, true); }
+  };
+})();
+
+let sndOn = true, keysOn = true;
+const S  = n => { if (sndOn) Sfx[n](); };
+const SK = () => { if (sndOn && keysOn) Sfx.key(); };
+/* cursor movement is per-keystroke feedback, so it rides the Keys switch */
+const SM = () => { if (sndOn && keysOn) Sfx.move(); };
+
+/* ══ state ═════════════════════════════════════════════════════════ */
+/* These helpers are declared before the state block below, because the
+   block initialises `view` by calling todayKey(), which needs pad2.
+   Declaring them after would leave pad2 in the temporal dead zone. */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const pad2 = n => String(n).padStart(2, '0');
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const nowISO = () => new Date().toISOString();
+
+/* A fixed set of marks rather than user-named tags — the glyph carries
+   the meaning, so a row reads at a glance and nothing needs labelling.
+   Every glyph has default *text* presentation in Unicode, so none turn
+   into colour emoji in any font. `shade` selects a CSS class, not a hex
+   value, so each theme polarity supplies its own red. Digit 1–8 picks
+   the nth, matching the order shown in the legend. */
+const MARKS = [
+  { id:'urgent',   glyph:'↯', name:'Urgent',   shade:0 },
+  { id:'priority', glyph:'★', name:'Priority', shade:1 },
+  { id:'blocked',  glyph:'⊘', name:'Blocked',  shade:2 },
+  { id:'flagged',  glyph:'⚑', name:'Flagged',  shade:3 },
+  { id:'waiting',  glyph:'◷', name:'Waiting',  shade:5 },
+  { id:'draft',    glyph:'✎', name:'Draft',    shade:4 },
+  { id:'money',    glyph:'$', name:'Money',    shade:2 },
+  { id:'personal', glyph:'⌂', name:'Personal', shade:5 }
+];
+const MARK_IDS = MARKS.map(m => m.id);
+
+/* CRT sub-effects. Each is an independent switch gated by the master, so
+   a setup can be scanlines-only, or warp without the rolling band. */
+const CRT_PARTS = [
+  { key:'crtScan',   cls:'crt-scan',   label:'Scanlines', def:true  },
+  { key:'crtRoll',   cls:'crt-roll',   label:'Roll',      def:false },
+  { key:'crtVig',    cls:'crt-vig',    label:'Vignette',  def:true  },
+  { key:'crtFringe', cls:'crt-fringe', label:'Fringe',    def:true  }
+];
+
+/* Warp is a level rather than a switch: 0 is flat glass, 5 is a fishbowl.
+   The numbers are the filter's displacement scale in px at the corners.
+
+   Intensity depends more on WARP_REGION than on these: the map spans the
+   filter region, so a tighter region puts more of the curve across the UI
+   and less across the empty margin. Past 760 the panel's own edges sample
+   from outside the region and lose pixels.
+
+   Barrel alone shrinks the picture, so each level pairs its displacement
+   with a layout gain that hands the width back — applied to the layout, not
+   as a transform, which would magnify the type. The gain sizes to the pull
+   at the edge midpoint, leaving the corners to over-shrink into the rounded
+   overscan a tube has. Gains are measured off renders, not derived: a ruler
+   spanning the panel gave an inward pull of 5/9/14/19/25px against 717px. */
+const WARP_SCALES = [0, 150,  300,   450,  600,  760];   // index 1-5
+/* Must match the filter's x/y inset below (x="-25%" ... width="150%"), since
+   the click correction normalises to the region rather than the box. */
+const WARP_REGION = 0.25;
+const WARP_GAIN   = [1, 1.007, 1.0126, 1.0195, 1.0265, 1.0349];
+const warpLevel = v => Math.max(1, Math.min(5, Math.round(Number(v) || 3)));
+
+/* ── colour overrides ──────────────────────────────────────────────
+   A theme is really two tones plus a mark hue; every other token in the
+   set color-mixes off them. So the settings expose exactly that: the
+   light tone, the dark tone, and one colour whose HUE seeds the mark
+   ramp. Which tone is text and which is ground depends on the theme's
+   polarity, so a single pair works across all four themes.
+
+   POLES mirrors the CSS defaults so the pickers can show what is
+   currently in effect; a test keeps the two in step. */
+const HEX = /^#[0-9a-f]{6}$/i;
+const POLES = {
+  'retro-dark':   { light:'#f4f2ec', dark:'#0b0b0b' },
+  'retro-light':  { light:'#f4f2ec', dark:'#0b0b0b' },
+  'modern-dark':  { light:'#fbfcfd', dark:'#000000' },
+  'modern-light': { light:'#ffffff', dark:'#000000' }
+};
+const MARK_DEFAULT = { dark:'#ff5c50', light:'#c00b22' };
+
+function hexToHsl(hex){
+  const v = parseInt(hex.slice(1), 16);
+  const r = ((v >> 16) & 255) / 255, g = ((v >> 8) & 255) / 255, b = (v & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) {
+    h = 60 * (mx === r ? ((g - b) / d + (g < b ? 6 : 0))
+            : mx === g ? (b - r) / d + 2
+            :            (r - g) / d + 4);
+  }
+  const l = (mx + mn) / 2;
+  return { h, s: (d ? d / (1 - Math.abs(2 * l - 1)) : 0) * 100, l: l * 100 };
+}
+
+function hslToHex(h, s, l){
+  h = ((h % 360) + 360) % 360; s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+  const seg = [[c,x,0],[x,c,0],[0,c,x],[0,x,c],[x,0,c],[c,0,x]][Math.floor(h / 60) % 6];
+  return '#' + seg.map(v => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
+}
+
+/* Six stops of a single hue — vivid, lighter, deeper, muted, pale, dusty
+   — the character the built-in reds have. Lightness differs by polarity
+   so every shade stays legible against its ground. */
+const MARK_STOPS = {
+  dark:  [[64,90],[74,72],[54,82],[58,45],[80,60],[66,32]],
+  light: [[44,88],[36,80],[31,78],[30,48],[40,55],[34,30]]
+};
+/* Displacement map for the barrel filter, drawn once on first use.
+   feDisplacementMap reads (channel/255 - 0.5) * scale, so 128 is "no
+   shift"; offsets grow with the square of the distance from centre,
+   which is what makes it a bulge rather than a uniform stretch. */
+const XLINK = 'http://www.w3.org/1999/xlink';
+let warpMap = null, warpBroken = false;
+function ensureWarpMap(){
+  if (warpMap || warpBroken) return warpMap;
+  try {
+    const N = 512, K = 0.5;   // saturates at the corners
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = N;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(N, N);
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const u = (x / (N - 1)) * 2 - 1, v = (y / (N - 1)) * 2 - 1;
+        const f = K * (u * u + v * v);
+        const i = (y * N + x) * 4;
+        /* Positive: sample from further out as the radius grows, pulling
+           content inward at the edges so straight lines bow outward. */
+        img.data[i]     = Math.round(128 + u * f * 127);
+        img.data[i + 1] = Math.round(128 + v * f * 127);
+        img.data[i + 2] = 128;
+        img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    warpMap = cv.toDataURL('image/png');
+    pointWarpMap();
+  } catch { warpBroken = true; }
+  return warpMap;
+}
+
+function pointWarpMap(){
+  const img = document.getElementById('crt-bulge-map');
+  if (!img || !warpMap) return;
+  img.setAttributeNS(XLINK, 'href', warpMap);
+  img.setAttribute('href', warpMap);
+}
+
+const markRamp = (hex, dark) =>
+  MARK_STOPS[dark ? 'dark' : 'light'].map(([l, s]) => hslToHex(hexToHsl(hex).h, s, l));
+
+const okHex = v => (typeof v === 'string' && HEX.test(v)) ? v.toLowerCase() : null;
+const markById = id => MARKS.find(m => m.id === id) || null;
+
+const LS = 'todo.daily.v1';
+/* Settings live in their own key as well as in the document. They belong to
+   this browser rather than to the list, so they outlast whichever file is
+   linked and an imported file cannot stamp its author's preferences on you. */
+const SET_KEY = 'todo.daily.settings';
+const blank = () => ({
+  version:4, updatedAt:null, days:{}, goals:[],
+  settings:{ theme:DEFAULT_THEME(), mode:'day', font:'mono', glow:false,
+             crt:false, crtScan:true, crtRoll:false,
+             crtWarpOn:false, crtWarp:3, crtVig:true, crtFringe:true,
+             sweep:true, hints:true, autoCarry:true,
+             lightColor:null, darkColor:null, markColor:null,
+             sound:true, keys:true, config:false }
+});
+let state = blank();
+let view  = todayKey();
+let mode  = 'day';
+let undoRec = null, undoTimer = null;
+
+/* Transient multi-selection of day-view tasks — a gesture in progress, not
+   part of the document, so it is not saved. Cleared when the visible day or
+   mode changes, so you cannot carry something you cannot see. */
+let selected = new Set();
+
+function todayKey(d = new Date()){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function shift(key, n){
+  const [y,m,d] = key.split('-').map(Number);
+  return todayKey(new Date(y, m-1, d + n));
+}
+/* Display order: unfinished first, then completed with the most recently
+   ticked last. This sorts a copy — the stored array keeps its own order,
+   so unchecking returns an item to the slot it came from instead of
+   stranding it at the bottom. The index tiebreak makes it deterministic
+   rather than relying on sort stability. */
+function ordered(list){
+  return list
+    .map((item, i) => ({ item, i }))
+    .sort((a, b) =>
+      (a.item.done ? 1 : 0) - (b.item.done ? 1 : 0) ||
+      (a.item.done
+        ? String(a.item.doneAt || '').localeCompare(String(b.item.doneAt || ''))
+        : 0) ||
+      a.i - b.i)
+    .map(x => x.item);
+}
+
+const day   = k => (state.days[k] ||= { tasks: [] });
+const tasks = k => (state.days[k]?.tasks) || [];
+
+/* ── weeks (ISO: Monday start) ─────────────────────────────────── */
+function weekStart(key){
+  const [y,m,d] = key.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+  return todayKey(dt);
+}
+const weekEnd  = key => shift(weekStart(key), 6);
+const weekDays = key => Array.from({length:7}, (_, i) => shift(weekStart(key), i));
+
+function isoWeek(key){
+  const [y,m,d] = key.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d));
+  dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7) + 3);   // Thursday
+  const thu = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+  thu.setUTCDate(thu.getUTCDate() - ((thu.getUTCDay() + 6) % 7) + 3);
+  return 1 + Math.round((dt - thu) / (7 * 86400000));
+}
+
+/* goals overlap the visible week if their range intersects it */
+function goalsInWeek(key){
+  const a = weekStart(key), b = weekEnd(key);
+  return state.goals
+    .filter(g => g.start <= b && (g.end || g.start) >= a)
+    .sort((x, y) =>
+      (x.done ? 1 : 0) - (y.done ? 1 : 0) ||
+      x.start.localeCompare(y.start) ||
+      x.createdAt.localeCompare(y.createdAt));
+}
+
+const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const fmtDay = k => { const [, m, d] = k.split('-'); return `${d} ${MON[+m-1]}`; };
+function fmtRange(s, e){
+  if (!e || e === s) return fmtDay(s);
+  const [sy,sm,sd] = s.split('-'), [ey,em,ed] = e.split('-');
+  if (sy === ey && sm === em) return `${sd}–${ed} ${MON[+sm-1]}`;
+  if (sy === ey)              return `${fmtDay(s)} → ${fmtDay(e)}`;
+  return `${s} → ${e}`;
+}
+
+/* ══ persistence ═══════════════════════════════════════════════════
+   localStorage is written synchronously on every change so nothing is
+   ever lost; the linked todo.json is written on a debounce.       */
+let handle = null, saveTimer = null, writing = false, dirty = false;
+let lastSaved = null, fileErr = '', needsGrant = false;
+
+const serialize = () => JSON.stringify(state, null, 2);
+
+function saveSettings(){
+  try { localStorage.setItem(SET_KEY, JSON.stringify(state.settings)); } catch {}
+}
+
+/* Data from the file, display preferences from this browser. */
+function adopt(inc){
+  const mine = state.settings;
+  state = inc;
+  state.settings = mine;
+}
+
+function touch(){
+  state.updatedAt = nowISO();
+  try { localStorage.setItem(LS, serialize()); } catch {}
+  saveSettings();
+  dirty = true;
+  paintStatus();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flush, 450);
+}
+
+async function flush(){
+  if (!handle || writing || !dirty) return;
+  writing = true;
+  const snapshot = serialize();
+  try {
+    const w = await handle.createWritable();
+    await w.write(snapshot);
+    await w.close();
+    dirty = (serialize() !== snapshot);      // changed again mid-write?
+    lastSaved = new Date();
+    fileErr = '';
+  } catch (e) {
+    fileErr = e && e.name === 'NotAllowedError' ? 'permission lost' : 'write failed';
+  } finally {
+    writing = false;
+    paintStatus();
+    if (dirty) { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 450); }
+  }
+}
+
+/* A FileSystemFileHandle can only be persisted in IndexedDB, which is
+   unavailable under some file:// configurations — hence the catches. */
+const idb = {
+  open(){
+    return new Promise((res, rej) => {
+      let r;
+      try { r = indexedDB.open('todo.daily', 1); } catch (e) { return rej(e); }
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result);
+      r.onerror   = () => rej(r.error);
+    });
+  },
+  async get(k){
+    try {
+      const db = await this.open();
+      return await new Promise((res, rej) => {
+        const q = db.transaction('kv').objectStore('kv').get(k);
+        q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+      });
+    } catch { return undefined; }
+  },
+  async set(k, v){
+    try {
+      const db = await this.open();
+      await new Promise((res, rej) => {
+        const t = db.transaction('kv', 'readwrite');
+        t.objectStore('kv').put(v, k);
+        t.oncomplete = res; t.onerror = () => rej(t.error);
+      });
+    } catch {}
+  },
+  async del(k){ await this.set(k, undefined); }
+};
+
+/* ══ file linking ══════════════════════════════════════════════════
+   Two separate actions, because the two pickers behave differently:
+
+     showOpenFilePicker  picks an existing file, leaves its contents
+                         intact, and grants READ access only.
+     showSaveFilePicker  creates the file — truncating it if it already
+                         exists — the moment the dialog returns.
+
+   So "open" is the only non-destructive way to adopt an existing
+   todo.json. Reading a handle returned by the save picker would always
+   come back empty, and pointing it at a real file would wipe it.   */
+const supported = typeof window.showOpenFilePicker === 'function'
+               && typeof window.showSaveFilePicker === 'function';
+const FILE_TYPES = [{ description:'JSON', accept:{ 'application/json':['.json'] } }];
+
+/* Both dialogs open in Downloads and filter to .json. The shared `id` makes
+   Chrome remember the directory actually used, so after the first pick both
+   dialogs reopen where todo.json really lives (startIn only seeds the first
+   use). `suggestedName` applies to the save dialog only. */
+const PICKER = { types:FILE_TYPES, startIn:'downloads', id:'todoDaily' };
+const FILE_NAME = 'todo.json';
+
+const docEmpty = s =>
+  !s.goals.length && Object.values(s.days).every(d => !d.tasks.length);
+
+const countOf = s => ({
+  tasks: Object.values(s.days).reduce((n, d) => n + d.tasks.length, 0),
+  goals: s.goals.length
+});
+
+function pickerFail(e, what){
+  if (e && e.name === 'AbortError') return;              // user cancelled
+  fileErr = e && e.name === 'SecurityError'
+    ? 'blocked on file:// — serve the folder over http'
+    : `could not ${what}`;
+  paintStatus();
+}
+
+/* link an existing file without destroying what is in it */
+async function openExisting(){
+  if (!supported) { fileErr = 'not supported in this browser'; paintStatus(); return; }
+  let h;
+  try {
+    [h] = await window.showOpenFilePicker({ ...PICKER, multiple:false });
+  } catch (e) { return pickerFail(e, 'open the picker'); }
+
+  let inc = null;
+  try {
+    const text = await (await h.getFile()).text();
+    if (text.trim()) inc = normalize(JSON.parse(text));
+  } catch {
+    fileErr = 'that file is not valid JSON';
+    paintStatus();
+    return;
+  }
+
+  /* Decide which copy survives before any write happens. */
+  if (inc && !docEmpty(inc)) {
+    if ((inc.updatedAt || '') >= (state.updatedAt || '') || docEmpty(state)) {
+      adopt(inc); applySettings(); autoCarry();
+    } else {
+      const c = countOf(inc);
+      const keepLocal = confirm(
+        `${h.name} already holds ${c.tasks} task(s) and ${c.goals} goal(s), ` +
+        `and was last saved before the copy in this browser.\n\n` +
+        `OK — keep the browser copy and overwrite the file.\n` +
+        `Cancel — load the file and discard the browser copy.`
+      );
+      if (!keepLocal) { adopt(inc); applySettings(); }
+    }
+  }
+
+  /* An open picker grants read only; writing needs an explicit grant. */
+  let writable = false;
+  try { writable = await h.requestPermission({ mode:'readwrite' }) === 'granted'; } catch {}
+
+  handle = h;
+  needsGrant = !writable;
+  fileErr = '';
+  await idb.set('handle', h);
+  if (writable) { dirty = true; await flush(); }
+  paintAll();
+}
+
+/* Merge items in from a file, keeping everything already here.
+   Unlike open/new this never links, never writes to the source, and
+   never adopts its settings — so it cannot stamp display preferences
+   or lose whichever copy happens to be newer. Matching is by id, so
+   importing the same file twice adds nothing the second time.      */
+async function importFile(){
+  if (!supported) { fileErr = 'not supported in this browser'; paintStatus(); return; }
+  let h;
+  try {
+    [h] = await window.showOpenFilePicker({ ...PICKER, multiple:false });
+  } catch (e) { return pickerFail(e, 'open the picker'); }
+
+  let inc;
+  try {
+    const text = await (await h.getFile()).text();
+    inc = normalize(JSON.parse(text));
+  } catch {
+    fileErr = 'that file is not valid JSON';
+    paintStatus();
+    return;
+  }
+
+  const newTasks = [], newGoals = [];
+  for (const [k, d] of Object.entries(inc.days)) {
+    const have = new Set(tasks(k).map(t => t.id));
+    for (const t of d.tasks) {
+      if (have.has(t.id)) continue;
+      day(k).tasks.push(t);
+      newTasks.push({ key:k, id:t.id });
+    }
+  }
+  const haveGoals = new Set(state.goals.map(g => g.id));
+  for (const g of inc.goals) {
+    if (haveGoals.has(g.id)) continue;
+    state.goals.push(g);
+    newGoals.push(g.id);
+  }
+
+  if (!newTasks.length && !newGoals.length) {
+    fileErr = `nothing new in ${h.name}`;
+    paintStatus();
+    return;
+  }
+
+  fileErr = '';
+  S('flip');
+  const bits = [];
+  if (newTasks.length) bits.push(`${newTasks.length} task${newTasks.length > 1 ? 's' : ''}`);
+  if (newGoals.length) bits.push(`${newGoals.length} goal${newGoals.length > 1 ? 's' : ''}`);
+  /* Matched by id across every day, not by the day they arrived on:
+     rollover may have moved them before Undo is pressed. */
+  const taskIds = new Set(newTasks.map(x => x.id));
+  const goalIds = new Set(newGoals);
+  stashUndo(`Imported ${bits.join(' and ')} from ${h.name}`, () => {
+    for (const k of Object.keys(state.days))
+      state.days[k].tasks = tasks(k).filter(x => !taskIds.has(x.id));
+    state.goals = state.goals.filter(g => !goalIds.has(g.id));
+  });
+
+  touch();
+  autoCarry(true);                     // silent: the import's own undo covers it
+
+  // land where the first imported item actually ended up
+  if (newTasks.length) {
+    const id = newTasks[0].id;
+    view = Object.keys(state.days).find(k => tasks(k).some(x => x.id === id))
+        || newTasks[0].key;
+  }
+  paintAll();
+}
+
+/* create a fresh file — this DOES replace whatever the user picks */
+async function createNew(){
+  if (!supported) { fileErr = 'not supported in this browser'; paintStatus(); return; }
+  let h;
+  try {
+    h = await window.showSaveFilePicker({ ...PICKER, suggestedName:FILE_NAME });
+  } catch (e) { return pickerFail(e, 'open the picker'); }
+  handle = h; needsGrant = false; fileErr = '';
+  await idb.set('handle', h);
+  dirty = true; await flush();
+  paintAll();
+}
+
+async function unlink(){
+  handle = null; needsGrant = false; fileErr = ''; lastSaved = null;
+  await idb.del('handle');
+  paintStatus();
+}
+
+async function grant(){
+  if (!handle) return;
+  try {
+    if (await handle.requestPermission({ mode:'readwrite' }) === 'granted') {
+      needsGrant = false; dirty = true; await flush();
+    }
+  } catch { fileErr = 'permission denied'; }
+  paintStatus();
+}
+
+async function restore(){
+  const h = await idb.get('handle');
+  if (!h) return;
+  handle = h;
+  try {
+    if (await h.queryPermission({ mode:'readwrite' }) === 'granted') {
+      const text = await (await h.getFile()).text();
+      if (text.trim()) {
+        const inc = JSON.parse(text);
+        if (inc && inc.days && (inc.updatedAt || '') >= (state.updatedAt || '')) {
+          adopt(normalize(inc)); applySettings(); autoCarry();
+        }
+      }
+    } else {
+      needsGrant = true;
+    }
+  } catch { needsGrant = true; }
+  paintAll();
+}
+
+function download(){
+  const url = URL.createObjectURL(new Blob([serialize()], { type:'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = FILE_NAME; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function normalize(raw){
+  const s = blank();
+  s.updatedAt = typeof raw.updatedAt === 'string' ? raw.updatedAt : null;
+
+  if (raw.settings && typeof raw.settings === 'object') Object.assign(s.settings, raw.settings);
+  s.settings.theme = LEGACY[s.settings.theme] || s.settings.theme;
+  if (!THEME_IDS.includes(s.settings.theme)) s.settings.theme = DEFAULT_THEME();
+  if (s.settings.mode !== 'week') s.settings.mode = 'day';
+  s.settings.config = !!s.settings.config;
+  s.settings.glow = !!s.settings.glow;
+  s.settings.crt  = !!s.settings.crt;
+  for (const part of CRT_PARTS)
+    s.settings[part.key] = part.def
+      ? s.settings[part.key] !== false
+      : !!s.settings[part.key];
+  /* Warp used to be one value doing two jobs. Split it: a switch and an
+     amount, so turning it off remembers how far it was bulging. */
+  const w = s.settings.crtWarp;
+  if (typeof w === 'boolean')      { s.settings.crtWarpOn = w;     s.settings.crtWarp = 3; }
+  else if (typeof w === 'number')  { if (s.settings.crtWarpOn === undefined)
+                                       s.settings.crtWarpOn = w > 0;
+                                     s.settings.crtWarp = w > 0 ? w : 3; }
+  s.settings.crtWarpOn = !!s.settings.crtWarpOn;
+  s.settings.crtWarp   = warpLevel(s.settings.crtWarp);
+  s.settings.hints = s.settings.hints !== false;    // default on
+  s.settings.sweep = s.settings.sweep !== false;    // default on
+  s.settings.autoCarry = s.settings.autoCarry !== false;   // default on
+  s.settings.lightColor = okHex(s.settings.lightColor);
+  s.settings.darkColor  = okHex(s.settings.darkColor);
+  s.settings.markColor  = okHex(s.settings.markColor);
+  if (!FONT_IDS.includes(s.settings.font)) s.settings.font = 'mono';
+
+  /* v3 and earlier had user-named tags. There is no meaningful mapping
+     from a label to a mark, so each old tag is carried over positionally
+     — an item keeps *a* marker rather than silently losing it. */
+  const legacy = Array.isArray(raw.tags) ? raw.tags.map(t => t && t.id) : [];
+  const markRef = rec => {
+    if (typeof rec.mark === 'string' && MARK_IDS.includes(rec.mark)) return rec.mark;
+    const i = legacy.indexOf(rec.tag);
+    return i >= 0 ? MARKS[i % MARKS.length].id : null;
+  };
+
+  if (raw.days && typeof raw.days === 'object') {
+    for (const [k, v] of Object.entries(raw.days)) {
+      if (!DATE_RE.test(k)) continue;
+      const list = Array.isArray(v?.tasks) ? v.tasks : [];
+      s.days[k] = { tasks: list.filter(t => t && typeof t.text === 'string').map(t => ({
+        id: typeof t.id === 'string' ? t.id : uid(),
+        text: t.text.slice(0, 400),
+        done: !!t.done,
+        mark: markRef(t),
+        createdAt: t.createdAt || nowISO(),
+        doneAt: t.doneAt || null
+      })) };
+    }
+  }
+
+  /* A goal without a valid start date has no place in a weekly view,
+     so it is dropped rather than silently shown as undated. */
+  if (Array.isArray(raw.goals)) {
+    s.goals = raw.goals
+      .filter(g => g && typeof g.text === 'string' && DATE_RE.test(g.start || ''))
+      .map(g => {
+        const end = DATE_RE.test(g.end || '') && g.end >= g.start ? g.end : g.start;
+        return {
+          id: typeof g.id === 'string' ? g.id : uid(),
+          text: g.text.slice(0, 200),
+          start: g.start,
+          end,
+          done: !!g.done,
+          mark: markRef(g),
+          createdAt: g.createdAt || nowISO(),
+          doneAt: g.doneAt || null
+        };
+      });
+  }
+  return s;
+}
+
+/* ══ dom ═══════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const el = {
+  dow:$('dow'), date:$('date'), rel:$('rel'),
+  cells:$('cells'), fill:$('fill'), cnt:$('cnt'), list:$('list'),
+  entry:$('entry'), input:$('input'), cursor:$('cursor'),
+  dayView:$('dayView'), weekView:$('weekView'),
+  tabDay:$('tabDay'), tabWeek:$('tabWeek'),
+  goalList:$('goalList'), goalCnt:$('goalCnt'), goalRange:$('goalRange'),
+  goalForm:$('goalForm'), goalText:$('goalText'), goalStart:$('goalStart'),
+  goalEnd:$('goalEnd'), goalErr:$('goalErr'),
+  weekDays:$('weekDays'), weekCnt:$('weekCnt'), weekDone:$('weekDone'),
+  selTray:$('selTray'), selMsg:$('selMsg'), selBtn:$('selBtn'),
+  carryTray:$('carryTray'), carryMsg:$('carryMsg'), carryBtn:$('carryBtn'),
+  undoTray:$('undoTray'), undoMsg:$('undoMsg'), undoBtn:$('undoBtn'),
+  fileGlyph:$('fileGlyph'), fileTxt:$('fileTxt'), saveTxt:$('saveTxt'), hint:$('hint'),
+  openBtn:$('openBtn'), newBtn:$('newBtn'), grantBtn:$('grantBtn'), importBtn:$('importBtn'),
+  unlinkBtn:$('unlinkBtn'), dlBtn:$('dlBtn'),
+  themeSeg:$('themeSeg'), sndBtn:$('sndBtn'), keysBtn:$('keysBtn'),
+  cfgBtn:$('cfgBtn'), config:$('config'), screen:$('screen'),
+  goalAdd:$('goalAdd'), legend:$('legend'),
+  fontSeg:$('fontSeg'), glowBtn:$('glowBtn'), crtBtn:$('crtBtn'), hintsBtn:$('hintsBtn'),
+  colLight:$('colLight'), colDark:$('colDark'), colMark:$('colMark'), colReset:$('colReset'),
+  crtScanBtn:$('crtScanBtn'), crtRollBtn:$('crtRollBtn'),
+  crtVigBtn:$('crtVigBtn'), crtFringeBtn:$('crtFringeBtn'),
+  crtWarpBtn:$('crtWarpBtn'), warpRange:$('warpRange'), warpVal:$('warpVal'),
+  sweepBtn:$('sweepBtn'), autoBtn:$('autoBtn'), autoTxt:$('autoTxt'),
+  prev:$('prev'), next:$('next'), today:$('today'), note:$('note'),
+  led:$('led'), lampTxt:$('lampTxt')
+};
+
+/* ══ keyboard shortcuts ════════════════════════════════════════════
+   macOS writes modifiers as glyphs with no "+" between them, so the
+   hints are built per platform rather than hardcoded.             */
+const IS_MAC = /mac/i.test(
+  (navigator.userAgentData && navigator.userAgentData.platform) ||
+  navigator.platform || navigator.userAgent
+);
+const K = IS_MAC
+  ? { alt:'⌥', enter:'↩', esc:'⎋', del:'⌫', shift:'⇧' }
+  : { alt:'Alt', enter:'Enter', esc:'Esc', del:'Del', shift:'Shift' };
+const combo = k => IS_MAC ? `${K.alt}${k}` : `${K.alt}+${k}`;
+
+const SHORTCUTS = [
+  [['↑','↓'],                        'line'],
+  [['←','→'],                        'control'],
+  [[K.enter],                        'add / activate'],
+  [[IS_MAC ? K.shift + K.enter : `${K.shift}+${K.enter}`], 'select'],
+  [['E'],                            'edit'],
+  [['T'],                            'mark'],
+  [['1–8'],                          'pick mark'],
+  [[K.del],                          'delete'],
+  [['U'],                            'undo'],
+  [['N'],                            'new'],
+  [['C'],                            'config'],
+  [[combo('←'), combo('→')],         'back / forward'],
+  [[combo('W')],                     'day / week'],
+  [[combo('T')],                     'theme'],
+  [[K.esc],                          'cancel']
+];
+
+/* ══ keyboard navigation ═══════════════════════════════════════════
+   The whole UI is one grid of lines. ↑/↓ step between lines, ←/→ step
+   between the controls on a line. A task row is a single line of
+   [checkbox, tag, delete], so walking the list does not mean walking
+   through three controls per task.
+
+   Every paint rebuilds the DOM, so position is captured beforehand and
+   restored afterwards — otherwise ticking something off would drop
+   focus to <body> and the next arrow press would start from the top.
+
+   Enter and Space are not handled here: every registered control is a
+   <button> or a field, so activation is native and screen-reader
+   semantics stay correct. */
+let lines = [];                          // [[el, el, …], …] in visual order
+let cur = { line:0, col:0 };             // last known position
+let focusHint = null;                    // {line,col} to restore after paint
+
+/* per-paint buckets, assembled into `lines` by buildLines() */
+let taskLines = [], goalLines = [], weekLines = [];
+
+const rowAdd = (bucket, els, actions) => {
+  const line = els.filter(Boolean);
+  if (actions) line[0]._nav = actions;
+  bucket.push(line);
+  return line;
+};
+
+const isField  = a => !!a && (a.tagName === 'INPUT' || a.isContentEditable);
+/* A colour swatch has no caret for ←/→ to move through, so horizontal
+   navigation may pass across it; only real text entry blocks it. */
+const isTextEntry = a => isField(a) && !(a.tagName === 'INPUT' && a.type === 'color');
+const isDate   = a => !!a && a.tagName === 'INPUT' && a.type === 'date';
+const isEditor = a => !!a && a.className === 'edit';
+
+/* ↑/↓ are free except where they mean something already: a date input
+   increments, and the inline editor exits only via Enter or Escape.
+   ←/→ are free only outside text entry, where they move the caret. */
+const vFree = () => { const a = document.activeElement; return !isDate(a) && !isEditor(a); };
+const hFree = () => !isTextEntry(document.activeElement);
+
+function buildLines(){
+  const L = [];
+  const add = els => {
+    const v = els.filter(x => x && !x.hidden && !x.disabled);
+    if (v.length) L.push(v);
+  };
+  add([el.cfgBtn]);                        // the shim is mouse-only
+  add([el.tabDay, el.tabWeek]);
+  add([el.prev, el.today, el.next]);
+  if (mode === 'day') {
+    taskLines.forEach(add);
+    add([el.input]);
+  } else {
+    goalLines.forEach(add);
+    add([el.goalText]);
+    add([el.goalStart, el.goalEnd, el.goalAdd]);
+    weekLines.forEach(add);
+  }
+  if (!el.selTray.hidden)   add([el.selBtn]);
+  if (!el.carryTray.hidden) add([el.carryBtn]);
+  if (!el.undoTray.hidden)  add([el.undoBtn]);
+  /* `hidden` on the wrapper does not set it on the descendants, so the
+     drawer's controls must be excluded explicitly — otherwise arrows
+     would focus invisible buttons. */
+  if (!el.config.hidden) {
+    add([el.openBtn, el.newBtn, el.grantBtn, el.unlinkBtn, el.importBtn, el.dlBtn]);
+    add([el.autoBtn]);
+    add([el.colLight, el.colDark, el.colMark, el.colReset]);
+    add([...el.fontSeg.children]);
+    add([...el.themeSeg.children]);
+    add([el.glowBtn, el.sweepBtn, el.hintsBtn]);
+    add([el.crtBtn, el.crtScanBtn, el.crtRollBtn, el.crtWarpBtn, el.warpRange,
+         el.crtVigBtn, el.crtFringeBtn]);
+    add([el.sndBtn, el.keysBtn]);
+  }
+  lines = L;
+}
+
+function locate(node){
+  for (let i = 0; i < lines.length; i++) {
+    const j = lines[i].indexOf(node);
+    if (j >= 0) return { line:i, col:j };
+  }
+  return null;
+}
+
+const focusable = n => !!n && !n.hidden && !n.disabled;
+
+function focusAt(line, col){
+  if (!lines.length) return;
+  const li = Math.max(0, Math.min(line, lines.length - 1));
+  const row = lines[li];
+  let ci = Math.max(0, Math.min(col, row.length - 1));
+  /* A control can be disabled after the line map was built (Sound gates
+     Keys). The browser refuses to focus it, which would leave focus put
+     and stall every further keypress — so step past it. */
+  if (!focusable(row[ci])) {
+    let found = -1;
+    for (let d = 1; d < row.length && found < 0; d++) {
+      if (focusable(row[ci + d])) found = ci + d;
+      else if (focusable(row[ci - d])) found = ci - d;
+    }
+    if (found < 0) return;
+    ci = found;
+  }
+  cur = { line:li, col:ci };
+  row[ci].focus();
+}
+
+function moveV(d){
+  const at = locate(document.activeElement);
+  SM();
+  if (!at) { focusAt(d > 0 ? 0 : lines.length - 1, cur.col); return; }
+  focusAt(at.line + d, at.col);            // clamped at both ends
+}
+
+function moveH(d){
+  const at = locate(document.activeElement);
+  SM();
+  if (!at) { focusAt(cur.line, 0); return; }
+  focusAt(at.line, at.col + d);
+}
+
+/* actions live on the first control of a line, so E/Del/T work from
+   anywhere on that row */
+const lineNav = () => {
+  const at = locate(document.activeElement);
+  return at ? (lines[at.line][0]._nav || null) : null;
+};
+
+const backToInput = () => (mode === 'week' ? el.goalText : el.input).focus();
+
+function paintKeys(){
+  el.note.textContent = '';
+  SHORTCUTS.forEach(([keys, label], i) => {
+    if (i) el.note.append(document.createTextNode(' · '));
+    keys.forEach((k, j) => {
+      if (j) el.note.append(document.createTextNode('/'));
+      const kb = document.createElement('kbd');
+      kb.textContent = k;
+      el.note.append(kb);
+    });
+    el.note.append(document.createTextNode(' ' + label));
+  });
+  el.prev.title    = `Previous (${combo('←')})`;
+  el.next.title    = `Next (${combo('→')})`;
+  el.tabDay.title  = `Day view (${combo('W')})`;
+  el.tabWeek.title = `Week view (${combo('W')})`;
+}
+
+/* The band moves top-down: the row with the largest offset peaks first,
+   so index 0 leads. Phase is measured from load rather than from element
+   creation, otherwise every repaint would snap the wave back to the top. */
+const SWEEP_PERIOD = 5.5, SWEEP_STEP = 0.22; // must match the CSS duration/step
+const sweepEpoch = Date.now();
+function sweepPhase(i, n){
+  const wall = ((Date.now() - sweepEpoch) / 1000) % SWEEP_PERIOD;
+  const own  = ((n - 1 - i) * SWEEP_STEP) % SWEEP_PERIOD;
+  return `-${((wall + own) % SWEEP_PERIOD).toFixed(3)}s`;
+}
+
+const DOW  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DOW3 = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const dowOf = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d).getDay(); };
+
+function bar(done, total, n = 24){
+  const f = total ? Math.round(done / total * n) : 0;
+  return '█'.repeat(f) + '·'.repeat(n - f);
+}
+
+function paintHead(){
+  if (mode === 'week') {
+    const a = weekStart(view), b = weekEnd(view);
+    el.dow.textContent = `Week ${pad2(isoWeek(view))}`;
+    el.date.textContent = `${fmtDay(a)} → ${fmtDay(b)}`;
+    const nowW = weekStart(todayKey());
+    const delta = Math.round((new Date(a) - new Date(nowW)) / (7 * 86400000));
+    el.rel.textContent =
+      delta ===  0 ? '▸ This week' :
+      delta === -1 ? 'Last week' :
+      delta ===  1 ? 'Next week' :
+      delta  <   0 ? `${-delta} weeks ago` : `In ${delta} weeks`;
+    return;
+  }
+  el.dow.textContent = DOW[dowOf(view)];
+  el.date.textContent = view;
+  const [y,m,d] = view.split('-').map(Number);
+  const delta = Math.round((new Date(y, m-1, d) - new Date(new Date().setHours(0,0,0,0))) / 86400000);
+  el.rel.textContent =
+    delta ===  0 ? '▸ Today' :
+    delta === -1 ? 'Yesterday' :
+    delta ===  1 ? 'Tomorrow' :
+    delta  <   0 ? `${-delta} days ago` : `In ${delta} days`;
+}
+
+function paintMeter(){
+  const t = tasks(view), done = t.filter(x => x.done).length;
+  el.cells.textContent = bar(done, t.length);
+  el.fill.style.width = (t.length ? done / t.length * 100 : 0) + '%';
+  el.cnt.textContent = `${pad2(done)}/${pad2(t.length)}`;
+}
+
+function paintList(){
+  const t = ordered(tasks(view));
+  el.list.textContent = '';
+  if (!t.length) {
+    const li = document.createElement('li');
+    const v = document.createElement('div');
+    v.className = 'void';
+    v.textContent = 'No entries — type below';
+    li.append(v); el.list.append(li);
+    return;
+  }
+  const openCount = t.filter(x => !x.done).length;
+  let openSeen = 0;
+
+  t.forEach((task, i) => {
+    const li = document.createElement('li');
+    if (task.done) li.classList.add('done');
+    else {
+      li.classList.add('open');
+      li.style.setProperty('--sweep', sweepPhase(openSeen++, openCount));
+    }
+    if (selected.has(task.id)) li.classList.add('sel');
+
+    const idx = document.createElement('span');
+    idx.className = 'idx'; idx.setAttribute('aria-hidden','true');
+    idx.textContent = pad2(i + 1);
+
+    const box = document.createElement('button');
+    box.type = 'button'; box.className = 'box';
+    box.setAttribute('aria-pressed', String(task.done));
+    box.title = task.done ? 'Mark not done' : 'Mark done';
+    box.innerHTML = '<span class="br">[</span><span class="mark"></span><span class="br">]</span>';
+    box.querySelector('.mark').textContent = task.done ? 'X' : '';
+    box.title += ' · shift-click to select';
+    box.addEventListener('click', e => {
+      if (e && e.shiftKey) toggleSelect(task.id); else toggle(task.id);
+    });
+
+    const txt = document.createElement('div');
+    txt.className = 'txt';
+    txt.textContent = task.text;
+    txt.title = 'Click to edit';
+    txt.addEventListener('click', () => edit(task.id, txt));
+
+    const mark = markCell(task);
+
+    const kill = document.createElement('button');
+    kill.type = 'button'; kill.className = 'kill';
+    kill.textContent = '✕'; kill.title = 'Delete';
+    kill.setAttribute('aria-label', `Delete: ${task.text}`);
+    kill.addEventListener('click', () => remove(task.id));
+
+    rowAdd(taskLines, [box, mark, kill], {
+      edit:   () => edit(task.id, txt),
+      remove: () => remove(task.id),
+      mark:   () => cycleMark(task),
+      pick:   n => pickMark(task, n),
+      select: () => toggleSelect(task.id)
+    });
+
+    li.append(idx, box, txt, mark, kill);
+    el.list.append(li);
+  });
+}
+
+/* ── week view ─────────────────────────────────────────────────── */
+function paintGoals(){
+  const gs = goalsInWeek(view);
+  const done = gs.filter(g => g.done).length;
+  el.goalCnt.textContent = `${pad2(done)}/${pad2(gs.length)}`;
+  el.goalRange.textContent = gs.length ? '' : 'none for this week';
+  el.goalList.textContent = '';
+
+  if (!gs.length) {
+    const li = document.createElement('li');
+    const v = document.createElement('div');
+    v.className = 'void';
+    v.textContent = 'No goals in range — add one below';
+    li.append(v); el.goalList.append(li);
+    return;
+  }
+
+  const a = weekStart(view), b = weekEnd(view);
+  const openGoals = gs.filter(x => !x.done).length;
+  let goalSeen = 0;
+
+  gs.forEach((g, i) => {
+    const li = document.createElement('li');
+    if (g.done) li.classList.add('done');
+    else {
+      li.classList.add('open');
+      li.style.setProperty('--sweep', sweepPhase(goalSeen++, openGoals));
+    }
+
+    const idx = document.createElement('span');
+    idx.className = 'idx'; idx.setAttribute('aria-hidden','true');
+    idx.textContent = pad2(i + 1);
+
+    const box = document.createElement('button');
+    box.type = 'button'; box.className = 'box';
+    box.setAttribute('aria-pressed', String(g.done));
+    box.title = g.done ? 'Mark not done' : 'Mark done';
+    box.innerHTML = '<span class="br">[</span><span class="mark"></span><span class="br">]</span>';
+    box.querySelector('.mark').textContent = g.done ? 'X' : '';
+    box.addEventListener('click', () => toggleGoal(g.id));
+
+    const txt = document.createElement('div');
+    txt.className = 'txt';
+    txt.textContent = g.text;
+    txt.title = 'Click to edit';
+    txt.addEventListener('click', () => editGoal(g.id, txt));
+
+    const when = document.createElement('span');
+    when.className = 'when';
+    // a goal that reaches outside this week is flagged, since its range spans
+    if (g.start < a || g.end > b) when.classList.add('over');
+    when.textContent = fmtRange(g.start, g.end);
+    when.title = g.end !== g.start ? `${g.start} → ${g.end}` : g.start;
+
+    const kill = document.createElement('button');
+    kill.type = 'button'; kill.className = 'kill';
+    kill.textContent = '✕'; kill.title = 'Delete';
+    kill.setAttribute('aria-label', `Delete goal: ${g.text}`);
+    kill.addEventListener('click', () => removeGoal(g.id));
+
+    const mark = markCell(g);
+
+    rowAdd(goalLines, [box, mark, kill], {
+      edit:   () => editGoal(g.id, txt),
+      remove: () => removeGoal(g.id),
+      mark:   () => cycleMark(g),
+      pick:   n => pickMark(g, n)
+    });
+
+    li.append(idx, box, txt, mark, when, kill);
+    el.goalList.append(li);
+  });
+}
+
+function paintWeek(){
+  const keys = weekDays(view);
+  const today = todayKey();
+  let tot = 0, don = 0;
+
+  el.weekDays.textContent = '';
+  for (const k of keys) {
+    const t = tasks(k);
+    const d = t.filter(x => x.done).length;
+    tot += t.length; don += d;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'wday' + (k === today ? ' today' : '');
+
+    const h = document.createElement('button');
+    h.type = 'button'; h.className = 'wdh';
+    h.title = `Open ${k}`;
+    h.addEventListener('click', () => { view = k; setMode('day'); });
+
+    const wd = document.createElement('span');
+    wd.className = 'wd'; wd.textContent = DOW3[dowOf(k)];
+    const wdt = document.createElement('span');
+    wdt.className = 'wdt'; wdt.textContent = k.slice(5);
+    const wc = document.createElement('span');
+    wc.className = 'wcells'; wc.setAttribute('aria-hidden','true');
+    wc.textContent = bar(d, t.length, 12);
+    const wdc = document.createElement('span');
+    wdc.className = 'wdc'; wdc.textContent = `${pad2(d)}/${pad2(t.length)}`;
+    h.append(wd, wdt, wc, wdc);
+    rowAdd(weekLines, [h]);                   // Enter opens the day (native click)
+    wrap.append(h);
+
+    if (t.length) {
+      const box = document.createElement('div');
+      box.className = 'wtasks';
+      for (const task of ordered(t)) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'wt' + (task.done ? ' done' : '');
+        b.setAttribute('aria-pressed', String(task.done));
+        b.title = task.done ? 'Mark not done' : 'Mark done';
+        const m = document.createElement('span');
+        m.className = 'wm'; m.textContent = task.done ? '[X]' : '[ ]';
+        const x = document.createElement('span');
+        x.className = 'wx'; x.textContent = task.text;
+        b.append(m);
+        const g = markGlyph(task);
+        if (g) b.append(g);
+        b.append(x);
+        b.addEventListener('click', () => toggleIn(k, task.id));
+        rowAdd(weekLines, [b], {               // Enter toggles (native click)
+          mark: () => cycleMark(task),
+          pick: n => pickMark(task, n)
+        });
+        box.append(b);
+      }
+      wrap.append(box);
+    } else {
+      const none = document.createElement('div');
+      none.className = 'wnone'; none.textContent = '—';
+      wrap.append(none);
+    }
+    el.weekDays.append(wrap);
+  }
+
+  el.weekCnt.textContent = `${pad2(don)}/${pad2(tot)}`;
+  el.weekDone.textContent = tot ? `${don} done · ${tot - don} outstanding` : 'nothing logged';
+}
+
+function paintSel(){
+  // drop ids no longer on this day (deleted, or already moved away)
+  for (const id of [...selected])
+    if (!tasks(view).some(t => t.id === id)) selected.delete(id);
+
+  if (mode !== 'day' || !selected.size) { el.selTray.hidden = true; return; }
+  el.selTray.hidden = false;
+  el.selMsg.textContent = `${selected.size} selected`;
+  el.selBtn.textContent = `Carry → ${shift(view, 1)}`;
+}
+
+function paintCarry(){
+  if (mode === 'week') { el.carryTray.hidden = true; return; }
+  let src = null;
+  const keys = Object.keys(state.days).filter(k => k < view).sort().reverse();
+  for (const k of keys) if (tasks(k).some(t => !t.done)) { src = k; break; }
+  if (!src) { el.carryTray.hidden = true; el.carryTray.dataset.src = ''; return; }
+  const n = tasks(src).filter(t => !t.done).length;
+  el.carryTray.hidden = false;
+  el.carryTray.dataset.src = src;
+  el.carryMsg.textContent = `${n} unfinished from ${src}`;
+}
+
+function paintStatus(){
+  const t = tasks(view);
+  el.led.classList.toggle('on', t.some(x => !x.done));
+  el.lampTxt.textContent = t.length && t.every(x => x.done) ? 'Clear' : 'Live';
+
+  const linked = !!handle;
+  el.openBtn.hidden   = linked;
+  el.newBtn.hidden    = linked;
+  el.grantBtn.hidden  = !(linked && needsGrant);
+  el.unlinkBtn.hidden = !linked;
+  el.openBtn.disabled = el.newBtn.disabled = el.importBtn.disabled = !supported;
+
+  if (!supported) {
+    el.fileGlyph.textContent = '◇';
+    el.fileTxt.textContent = 'File linking unsupported — local only';
+  } else if (!linked) {
+    el.fileGlyph.textContent = '◇';
+    el.fileTxt.textContent = fileErr || 'Not linked — local only';
+  } else if (needsGrant) {
+    el.fileGlyph.textContent = '◈';
+    el.fileTxt.textContent = `${handle.name} — read only, needs write access`;
+  } else {
+    el.fileGlyph.textContent = '◆';
+    el.fileTxt.textContent = fileErr ? `${handle.name} — ${fileErr}` : handle.name;
+  }
+
+  el.saveTxt.textContent =
+    !linked || needsGrant ? '' :
+    writing || dirty ? '· writing…' :
+    lastSaved ? `· saved ${lastSaved.toLocaleTimeString()}` : '';
+
+  el.hint.textContent =
+    linked && !needsGrant ? 'Writes on every keystroke' :
+    !supported            ? 'Kept in this browser only' :
+                            'Open links an existing file · New replaces one';
+}
+
+function paintAll(){
+  const want = focusHint || locate(document.activeElement);
+  focusHint = null;
+  taskLines = []; goalLines = []; weekLines = [];
+
+  paintHead();
+  if (mode === 'week') { paintGoals(); paintWeek(); }
+  else                 { paintMeter(); paintList(); }
+  paintSel(); paintCarry(); paintStatus();
+  buildLines();
+
+  // keep the keyboard cursor where it was, clamped if the line went away
+  if (want) focusAt(want.line, want.col);
+}
+
+/* ══ task actions ══════════════════════════════════════════════════ */
+function add(text){
+  text = text.trim();
+  if (!text) return;
+  day(view).tasks.push({ id:uid(), text:text.slice(0,400), done:false, mark:null,
+                         createdAt:nowISO(), doneAt:null });
+  touch(); paintAll();
+}
+
+function toggleIn(key, id){
+  const list = tasks(key);
+  const t = list.find(x => x.id === id);
+  if (!t) return;
+  const wasClear = list.length > 0 && list.every(x => x.done);
+  t.done = !t.done;
+  t.doneAt = t.done ? nowISO() : null;
+  S(t.done ? 'check' : 'uncheck');
+  /* Only on the crossing into complete — never on an already-clear day,
+     never on unchecking, and never for a day with nothing on it. */
+  if (!wasClear && list.length > 0 && list.every(x => x.done)) S('done');
+  touch(); paintAll();
+}
+const toggle = id => toggleIn(view, id);
+
+function stashUndo(msg, restoreFn){
+  undoRec = restoreFn;
+  el.undoTray.hidden = false;
+  el.undoMsg.textContent = msg;
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { undoRec = null; el.undoTray.hidden = true; }, 9000);
+}
+const clip = s => `“${s.slice(0,46)}${s.length > 46 ? '…' : ''}”`;
+
+function remove(id){
+  const list = tasks(view);
+  const i = list.findIndex(x => x.id === id);
+  if (i < 0) return;
+  const [gone] = list.splice(i, 1);
+  const key = view;
+  S('del');
+  stashUndo(`Deleted ${clip(gone.text)}`, () => {
+    day(key).tasks.splice(Math.min(i, tasks(key).length), 0, gone);
+    if (key !== view) view = key;
+  });
+  touch(); paintAll();
+}
+
+function undo(){
+  if (!undoRec) return;
+  const fn = undoRec;
+  undoRec = null; clearTimeout(undoTimer); el.undoTray.hidden = true;
+  fn(); S('tap'); touch(); paintAll();
+}
+
+function edit(id, node){
+  inlineEdit(node, tasks(view).find(x => x.id === id), 400, t => {
+    const i = tasks(view).indexOf(t);
+    if (i >= 0) tasks(view).splice(i, 1);
+  });
+}
+
+/* ══ goal actions ══════════════════════════════════════════════════ */
+function addGoal(){
+  const text  = el.goalText.value.trim();
+  const start = el.goalStart.value;
+  let   end   = el.goalEnd.value;
+
+  const fail = m => { el.goalErr.hidden = false; el.goalErr.textContent = m; S('del'); };
+  el.goalErr.hidden = true;
+
+  if (!text)                 return fail('A goal needs a description.');
+  if (!DATE_RE.test(start))  return fail('A goal needs a date — set “From”, and “To” for a range.');
+  if (end && !DATE_RE.test(end)) return fail('That end date is not valid.');
+  if (end && end < start)    return fail('The end date is before the start date.');
+  if (!end) end = start;
+
+  state.goals.push({ id:uid(), text:text.slice(0,200), start, end,
+                     done:false, mark:null, createdAt:nowISO(), doneAt:null });
+  el.goalText.value = '';
+  S('ret');
+  touch();
+  // jump to the week the goal starts in, so it is always visible after adding
+  if (start < weekStart(view) || start > weekEnd(view)) view = start;
+  paintAll();
+  el.goalText.focus();
+}
+
+function toggleGoal(id){
+  const g = state.goals.find(x => x.id === id);
+  if (!g) return;
+  g.done = !g.done;
+  g.doneAt = g.done ? nowISO() : null;
+  S(g.done ? 'check' : 'uncheck');
+  touch(); paintAll();
+}
+
+function removeGoal(id){
+  const i = state.goals.findIndex(x => x.id === id);
+  if (i < 0) return;
+  const [gone] = state.goals.splice(i, 1);
+  S('del');
+  stashUndo(`Deleted goal ${clip(gone.text)}`, () => {
+    state.goals.splice(Math.min(i, state.goals.length), 0, gone);
+  });
+  touch(); paintAll();
+}
+
+function editGoal(id, node){
+  inlineEdit(node, state.goals.find(x => x.id === id), 200, g => {
+    const i = state.goals.indexOf(g);
+    if (i >= 0) state.goals.splice(i, 1);
+  });
+}
+
+/* Shared inline editor for task and goal text. The grid position is
+   snapshotted on open so focus returns to the row, not to <body>.
+   className 'edit' marks it so ↑/↓ stay with the caret. */
+function inlineEdit(node, rec, max, dropFn){
+  if (!rec || node.querySelector('input')) return;
+  S('tap');
+  const back = { ...cur };
+  const inp = document.createElement('input');
+  inp.className = 'edit';
+  inp.type = 'text'; inp.value = rec.text; inp.maxLength = max;
+  inp.setAttribute('aria-label', 'Edit text');
+  node.textContent = ''; node.append(inp);
+  inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+
+  let closed = false;
+  const commit = save => {
+    if (closed) return; closed = true;
+    if (save) {
+      const v = inp.value.trim();
+      if (v && v !== rec.text) { rec.text = v; touch(); }
+      else if (!v) { S('del'); dropFn(rec); touch(); }
+    }
+    focusHint = back;
+    paintAll();
+  };
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter')       { e.preventDefault(); S('ret'); commit(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); S('tap'); commit(false); }
+    else SK();
+  });
+  inp.addEventListener('blur', () => commit(true));
+}
+
+/* ══ selection ══════════════════════════════════════════════════════ */
+function toggleSelect(id){
+  if (selected.has(id)) selected.delete(id); else selected.add(id);
+  S('tap');
+  paintAll();                       // no touch(): selection is not persisted
+}
+
+/* move every selected task onto the following day */
+function carrySelected(){
+  const from = view, to = shift(view, 1);
+  const list = tasks(from);
+  const moving = list.filter(t => selected.has(t.id));
+  if (!moving.length) return;
+  const at = moving.map(t => list.indexOf(t));          // for an exact undo
+  state.days[from].tasks = list.filter(t => !selected.has(t.id));
+  day(to).tasks.push(...moving);
+  selected.clear();
+  S('flip');
+  stashUndo(`Moved ${moving.length} item${moving.length > 1 ? 's' : ''} to ${to}`, () => {
+    const back = new Set(moving.map(t => t.id));
+    state.days[to].tasks = tasks(to).filter(t => !back.has(t.id));
+    const home = day(from).tasks;
+    moving.forEach((t, i) => home.splice(Math.min(at[i], home.length), 0, t));
+  });
+  touch(); paintAll();
+}
+
+/* ══ marks ═════════════════════════════════════════════════════════ */
+/* cycle: none → first → … → last → none */
+function cycleMark(rec){
+  const i = MARK_IDS.indexOf(rec.mark);
+  rec.mark = (i + 1 >= MARKS.length) ? null : MARKS[i + 1].id;
+  S('tap'); touch(); paintAll();
+}
+
+/* 1–8 pick the nth mark (pressing it again clears), 0 clears */
+function pickMark(rec, n){
+  if (n === 0) rec.mark = null;
+  else {
+    const m = MARKS[n - 1];
+    if (!m) return;
+    rec.mark = rec.mark === m.id ? null : m.id;
+  }
+  S('tap'); touch(); paintAll();
+}
+
+function markCell(rec){
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'markcell';
+  const m = markById(rec.mark);
+  if (m) {
+    b.textContent = m.glyph;
+    b.className = `markcell m${m.shade}`;
+    b.title = `${m.name} — click to change`;
+    b.setAttribute('aria-label', `Mark: ${m.name}. Change mark`);
+  } else {
+    b.classList.add('none');
+    b.textContent = '+';
+    b.title = 'Add a mark';
+    b.setAttribute('aria-label', 'Add a mark');
+  }
+  b.addEventListener('click', () => cycleMark(rec));
+  return b;
+}
+
+function markGlyph(rec){
+  const m = markById(rec.mark);
+  if (!m) return null;
+  const sp = document.createElement('span');
+  sp.className = `wmark m${m.shade}`;
+  sp.textContent = m.glyph;
+  sp.title = m.name;
+  return sp;
+}
+
+/* legend: the only place the names appear, numbered to match the keys */
+function paintLegend(){
+  el.legend.textContent = '';
+  MARKS.forEach((m, i) => {
+    const w = document.createElement('span');
+    w.className = 'lg';
+    const num = document.createElement('b'); num.textContent = String(i + 1);
+    const gl = document.createElement('i'); gl.textContent = m.glyph;
+    gl.className = `m${m.shade}`;
+    const nm = document.createElement('span'); nm.textContent = m.name;
+    w.append(num, gl, nm);
+    el.legend.append(w);
+  });
+}
+
+/* ══ config drawer ═════════════════════════════════════════════════ */
+function setConfig(open, quiet){
+  state.settings.config = !!open;
+  el.config.hidden = !open;
+  el.cfgBtn.setAttribute('aria-expanded', String(!!open));
+  el.cfgBtn.setAttribute('aria-pressed', String(!!open));
+  applySettings();
+  if (!quiet) { S('flip'); touch(); }
+  paintAll();
+  if (!open && !quiet) el.cfgBtn.focus();   // closing must not orphan focus
+}
+
+/* ══ rollover ═══════════════════════════════════════════════════════
+   Unfinished work should not be stranded on a day that has passed, so
+   anything still open on an earlier day moves onto today — at load, when
+   a linked file is adopted, and on the first tick after midnight.
+   Completed items stay where they were: that is the day's record.
+
+   Everything moves straight to today rather than one day at a time, so
+   a gap of a week still lands in one hop. */
+function autoCarry(quiet){
+  if (state.settings.autoCarry === false) return 0;
+  const today = todayKey();
+  const moved = [];
+
+  for (const k of Object.keys(state.days).filter(d => d < today).sort()) {
+    const list = tasks(k);
+    const open = list.filter(t => !t.done);
+    if (!open.length) continue;
+    open.forEach(t => moved.push({ id:t.id, from:k, at:list.indexOf(t), task:t }));
+    state.days[k].tasks = list.filter(t => t.done);
+    if (!state.days[k].tasks.length) delete state.days[k];   // no record to keep
+    day(today).tasks.push(...open);
+  }
+  if (!moved.length) return 0;
+
+  const ids = new Set(moved.map(m => m.id));
+  if (!quiet) stashUndo(`Carried ${moved.length} unfinished item${moved.length > 1 ? 's' : ''} into today`, () => {
+    state.days[today].tasks = tasks(today).filter(t => !ids.has(t.id));
+    for (const m of moved) {
+      const home = day(m.from).tasks;
+      home.splice(Math.min(m.at, home.length), 0, m.task);
+    }
+  });
+  touch();
+  return moved.length;
+}
+
+/* ══ navigation ════════════════════════════════════════════════════ */
+function carry(){
+  const src = el.carryTray.dataset.src;
+  if (!src) return;
+  const moving = tasks(src).filter(t => !t.done);
+  if (!moving.length) return;
+  state.days[src].tasks = tasks(src).filter(t => t.done);
+  day(view).tasks.push(...moving);
+  S('flip');
+  touch(); paintAll();
+}
+
+function go(n){
+  view = shift(view, mode === 'week' ? n * 7 : n);
+  selected.clear();
+  S('nav');
+  paintAll();
+}
+
+function setMode(m, quiet){
+  mode = (m === 'week') ? 'week' : 'day';
+  selected.clear();
+  state.settings.mode = mode;
+  el.dayView.hidden  = mode !== 'day';
+  el.weekView.hidden = mode !== 'week';
+  el.tabDay.setAttribute('aria-pressed',  String(mode === 'day'));
+  el.tabWeek.setAttribute('aria-pressed', String(mode === 'week'));
+  if (mode === 'week') seedGoalDates();
+  if (!quiet) { S('flip'); touch(); }
+  paintAll();
+  if (mode === 'day' && !quiet) el.input.focus();
+}
+
+/* default the new-goal range to the visible week */
+function seedGoalDates(){
+  if (!el.goalStart.value) el.goalStart.value = weekStart(view);
+  if (!el.goalEnd.value)   el.goalEnd.value   = weekEnd(view);
+}
+
+/* ══ settings ══════════════════════════════════════════════════════ */
+const loadedFonts = new Set();
+function loadFont(url){
+  if (!url || loadedFonts.has(url)) return;
+  loadedFonts.add(url);
+  const l = document.createElement('link');
+  l.rel = 'stylesheet'; l.href = url;
+  document.head.append(l);
+}
+
+function buildSeg(node, items, key, onPick){
+  node.textContent = '';
+  for (const it of items) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip';
+    b.dataset[key] = it.id;
+    b.textContent = it.label;
+    b.addEventListener('click', () => onPick(it.id));
+    node.append(b);
+  }
+}
+
+function setFont(id){
+  if (!FONT_IDS.includes(id)) return;
+  state.settings.font = id;
+  applySettings(); S('flip'); touch();
+}
+
+/* Toggling a setting can enable or disable another control (Sound gates
+   Keys), so the line map has to be rebuilt — otherwise arrows would try
+   to focus a control the browser now refuses, and navigation stalls. */
+function setColor(key, hex){
+  state.settings[key] = okHex(hex);
+  applySettings(); touch(); paintAll();
+}
+
+function resetColors(){
+  state.settings.lightColor = state.settings.darkColor = state.settings.markColor = null;
+  applySettings(); S('flip'); touch(); paintAll();
+}
+
+function setToggle(key, on){
+  state.settings[key] = !!on;
+  applySettings(); S('flip'); touch(); paintAll();
+}
+
+function setTheme(id){
+  if (!THEME_IDS.includes(id)) return;
+  state.settings.theme = id;
+  applySettings();
+  S('flip');
+  touch();
+}
+
+function cycleTheme(){
+  const i = THEME_IDS.indexOf(state.settings.theme);
+  setTheme(THEME_IDS[(i + 1) % THEME_IDS.length]);
+}
+
+function applySettings(){
+  const theme = THEME_IDS.includes(state.settings.theme) ? state.settings.theme : DEFAULT_THEME();
+  state.settings.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem(THEME_KEY, theme); } catch {}   // read pre-paint next load
+  Sfx.profile((THEMES.find(t => t.id === theme) || {}).sfx);
+  for (const b of el.themeSeg.children)
+    b.setAttribute('aria-pressed', String(b.dataset.pick === theme));
+
+  /* Tones. Inline custom properties outrank the theme blocks, and every
+     other token (page, panel, hair, muted, faint, slot, row-hover) mixes
+     off these two — so setting them restyles the whole app. */
+  const root = document.documentElement.style;
+  const isDark = theme.endsWith('-dark');
+  const pole = POLES[theme] || POLES['retro-dark'];
+  const light = okHex(state.settings.lightColor);
+  const dark  = okHex(state.settings.darkColor);
+  const put = (prop, val) => val ? root.setProperty(prop, val) : root.removeProperty(prop);
+  put(isDark ? '--fg' : '--bg', light);
+  put(isDark ? '--bg' : '--fg', dark);
+
+  const mark = okHex(state.settings.markColor);
+  const ramp = mark ? markRamp(mark, isDark) : null;
+  for (let i = 0; i < 6; i++) put(`--m${i}`, ramp && ramp[i]);
+
+  el.colLight.value = light || pole.light;
+  el.colDark.value  = dark  || pole.dark;
+  el.colMark.value  = mark  || MARK_DEFAULT[isDark ? 'dark' : 'light'];
+
+  // mirrored for the pre-paint script so overrides land before first paint
+  try { localStorage.setItem('todo.daily.colors', JSON.stringify({ light, dark })); } catch {}
+
+  const font = FONTS.find(f => f.id === state.settings.font) || FONTS[0];
+  state.settings.font = font.id;
+  if (font.stack) document.documentElement.style.setProperty('--font', font.stack);
+  else            document.documentElement.style.removeProperty('--font');
+  loadFont(font.url);
+  for (const b of el.fontSeg.children)
+    b.setAttribute('aria-pressed', String(b.dataset.pick === font.id));
+
+  const glow = !!state.settings.glow;
+  document.documentElement.classList.toggle('glow', glow);
+  el.glowBtn.setAttribute('aria-pressed', String(glow));
+  el.glowBtn.textContent = `Glow ${glow ? '●' : '○'}`;
+
+  const crt = !!state.settings.crt;
+  document.documentElement.classList.toggle('crt', crt);
+  el.crtBtn.setAttribute('aria-pressed', String(crt));
+  el.crtBtn.textContent = `On ${crt ? '●' : '○'}`;
+  for (const part of CRT_PARTS) {
+    const on = !!state.settings[part.key];
+    document.documentElement.classList.toggle(part.cls, on);
+    const btn = el[part.key + 'Btn'];
+    btn.setAttribute('aria-pressed', String(on));
+    btn.textContent = `${part.label} ${on ? '●' : '○'}`;
+    btn.disabled = !crt;                 // gated: the master owns them
+  }
+
+  const warpOn = !!state.settings.crtWarpOn;
+  const warp = warpLevel(state.settings.crtWarp);
+  state.settings.crtWarp = warp;
+
+  /* The warp can be on yet not live, when the CRT master is off. The filter
+     is gated on `.crt` already, but --warp-gain is not, and leaving it set
+     lays the panel out oversized with no barrel to squeeze it back. */
+  const warpLive = warpOn && crt;
+
+  document.documentElement.classList.toggle('crt-warp', warpLive);
+  document.documentElement.classList.toggle(
+    'warp-ok', warpLive && !!ensureWarpMap());
+  const disp = document.getElementById('crt-bulge-disp');
+  if (disp) disp.setAttribute('scale', String(warpLive ? WARP_SCALES[warp] : 0));
+  put('--warp-gain', warpLive ? String(WARP_GAIN[warp]) : null);
+  el.crtWarpBtn.setAttribute('aria-pressed', String(warpOn));
+  el.crtWarpBtn.textContent = `Warp ${warpOn ? '●' : '○'}`;
+  el.crtWarpBtn.disabled = !crt;
+  el.warpRange.value = String(warp);
+  el.warpVal.textContent = String(warp);
+  el.warpRange.disabled = !crt || !warpOn;      // amount is moot while off
+
+  const sweep = state.settings.sweep !== false;
+  document.documentElement.classList.toggle('sweep', sweep);
+  el.sweepBtn.setAttribute('aria-pressed', String(sweep));
+  el.sweepBtn.textContent = `Sweep ${sweep ? '●' : '○'}`;
+
+  const auto = state.settings.autoCarry !== false;
+  el.autoBtn.setAttribute('aria-pressed', String(auto));
+  el.autoBtn.textContent = `Auto ${auto ? '●' : '○'}`;
+  el.autoTxt.textContent = auto
+    ? 'Unfinished items follow you to today'
+    : 'Unfinished items stay on their own day';
+
+  const hints = state.settings.hints !== false;
+  el.note.hidden = !hints;
+  el.hintsBtn.setAttribute('aria-pressed', String(hints));
+  el.hintsBtn.textContent = `Hints ${hints ? '●' : '○'}`;
+
+  sndOn  = state.settings.sound !== false;
+  keysOn = state.settings.keys  !== false;
+  el.sndBtn.setAttribute('aria-pressed', String(sndOn));
+  el.sndBtn.textContent = `Sound ${sndOn ? '●' : '○'}`;
+  el.keysBtn.setAttribute('aria-pressed', String(keysOn));
+  el.keysBtn.textContent = `Keys ${keysOn ? '●' : '○'}`;
+  el.keysBtn.disabled = !sndOn;
+
+  const open = !!state.settings.config;
+  el.config.hidden = !open;
+  el.cfgBtn.setAttribute('aria-expanded', String(open));
+  el.cfgBtn.setAttribute('aria-pressed', String(open));
+}
+
+/* ══ click correction ════════════════════════════════════════════════
+   Filters are not accounted for in hit testing: the browser routes a click
+   to whatever sits at the pointer's LAYOUT position, while the user aimed
+   at the painted one. feDisplacementMap paints, at each point P, the source
+   content from P + d(P), so the element under a painted point is one
+   evaluation of d at that point. The click is then re-dispatched there,
+   which covers every control whatever its size or position. Keyboard input
+   never had the problem and is left alone.
+
+   WARP_FIELD is measured, not taken from the spec. By the spec this map
+   should displace by 0.249*u*r^2*scale; Chrome applies 0.0748, a third of
+   that, consistent across levels 1-5 and both axes. Using the spec value
+   lands clicks further from the control than no correction at all. Markers
+   at known layout points, located in screenshots, are how it was measured;
+   dev/test.js pins the constant. Accuracy is ~2px, the floor for an 8-bit
+   map: one channel step is scale/255. WARP_DRIFT is the rest of that
+   quantisation — 0.5 is not representable, so neutral 128 shifts the whole
+   picture slightly. */
+const WARP_FIELD = 0.0748;
+const WARP_DRIFT = 0.5 / 255;
+
+function warpInverse(px, py){
+  const S = el.screen.getBoundingClientRect();
+  if (!S.width || !S.height) return null;
+  const scale = WARP_SCALES[warpLevel(state.settings.crtWarp)];
+  const I = WARP_REGION;
+  const rx = S.left - I * S.width,  rw = S.width  * (1 + 2 * I);
+  const ry = S.top  - I * S.height, rh = S.height * (1 + 2 * I);
+  const u = (px - rx) / (rw / 2) - 1;
+  const v = (py - ry) / (rh / 2) - 1;
+  const r2 = u * u + v * v;                 // barrel: grows with radius
+  return [px + (WARP_DRIFT + WARP_FIELD * u * r2) * scale,
+          py + (WARP_DRIFT + WARP_FIELD * v * r2) * scale];
+}
+
+const HITTABLE = 'button, input, label, .txt, .tab, .wt, .wdh';
+let dragRange = null;
+
+function slideTo(input, x){
+  const r = input.getBoundingClientRect();
+  const min = Number(input.min || 0), max = Number(input.max || 100);
+  const step = Number(input.step) || 1;
+  const t = Math.min(1, Math.max(0, (x - r.left) / (r.width || 1)));
+  const val = String(Math.round((min + t * (max - min)) / step) * step);
+  if (val === input.value) return;
+  input.value = val;
+  input.dispatchEvent(new Event('input', { bubbles:true }));
+}
+
+/* What did the user actually aim at? Null when the browser already got it
+   right, or when the event carries no pointer position: a keyboard Enter
+   arrives as a trusted click at 0,0, and correcting that would fire
+   whatever happens to sit in the corner. */
+function aimedAt(e){
+  if (!document.documentElement.classList.contains('warp-ok')) return null;
+  if (!e.isTrusted || e.button) return null;
+  if (e.type === 'click' && !e.detail) return null;      // keyboard activation
+  if (!e.clientX && !e.clientY) return null;
+  const pt = warpInverse(e.clientX, e.clientY);
+  if (!pt) return null;
+  const under = document.elementFromPoint(pt[0], pt[1]);
+  const hit = under && under.closest ? under.closest(HITTABLE) : null;
+  const native = e.target && e.target.closest ? e.target.closest(HITTABLE) : null;
+  if (!hit || hit === native || hit.disabled) return null;
+  return { hit, x: pt[0] };
+}
+
+/* Chrome generates the click from pointerup whether or not pointerdown was
+   defaulted, so stopping the press is not enough on its own — the wrongly
+   aimed click still lands and you get both actions at once. The press only
+   keeps focus off the wrong element; the activation is swapped on click. */
+function onWarpPress(e){
+  const a = aimedAt(e);
+  if (!a) return;
+  e.preventDefault(); e.stopPropagation();
+
+  /* a click cannot move a slider on its own, and suppressing the default
+     also loses the drag, so the value is taken from the corrected point and
+     kept in step while the pointer is down */
+  if (a.hit.tagName === 'INPUT' && a.hit.type === 'range') {
+    a.hit.focus(); dragRange = a.hit; slideTo(a.hit, a.x);
+  }
+}
+
+function onWarpClick(e){
+  const a = aimedAt(e);
+  if (!a) return;
+  e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+  if (a.hit.tagName === 'INPUT' && a.hit.type === 'range') return;   // set on press
+  if (a.hit.focus) a.hit.focus();
+  if (a.hit.click) a.hit.click();
+}
+
+/* ══ wiring ════════════════════════════════════════════════════════ */
+el.entry.addEventListener('submit', e => {
+  e.preventDefault();
+  const v = el.input.value;
+  if (!v.trim()) return;
+  S('ret');
+  el.input.value = '';
+  add(v);
+});
+el.input.addEventListener('keydown', e => { if (e.key !== 'Enter') SK(); });
+el.input.addEventListener('focus', () => el.cursor.style.visibility = 'hidden');
+el.input.addEventListener('blur',  () => el.cursor.style.visibility = '');
+
+el.goalForm.addEventListener('submit', e => { e.preventDefault(); addGoal(); });
+el.goalText.addEventListener('keydown', e => { if (e.key !== 'Enter') SK(); });
+
+el.cfgBtn.addEventListener('click', () => setConfig(el.config.hidden));
+el.glowBtn.addEventListener('click',  () => setToggle('glow',  !state.settings.glow));
+el.crtBtn.addEventListener('click', () => setToggle('crt', !state.settings.crt));
+el.crtWarpBtn.addEventListener('click', () => setToggle('crtWarpOn', !state.settings.crtWarpOn));
+el.warpRange.addEventListener('input', e => {
+  state.settings.crtWarp = warpLevel(e.target.value);
+  S('tick');                               // a detent per step
+  applySettings(); touch(); paintAll();
+});
+for (const part of CRT_PARTS)
+  el[part.key + 'Btn'].addEventListener('click',
+    () => setToggle(part.key, !state.settings[part.key]));
+el.colLight.addEventListener('input', e => setColor('lightColor', e.target.value));
+el.colDark.addEventListener('input',  e => setColor('darkColor',  e.target.value));
+el.colMark.addEventListener('input',  e => setColor('markColor',  e.target.value));
+el.colReset.addEventListener('click', () => { S('tap'); resetColors(); });
+
+el.sweepBtn.addEventListener('click', () => setToggle('sweep', state.settings.sweep === false));
+el.autoBtn.addEventListener('click', () => {
+  setToggle('autoCarry', state.settings.autoCarry === false);
+  autoCarry();                          // switching it on takes effect at once
+  paintAll();
+});
+el.hintsBtn.addEventListener('click', () => setToggle('hints', state.settings.hints === false));
+
+el.tabDay.addEventListener('click',  () => setMode('day'));
+el.tabWeek.addEventListener('click', () => setMode('week'));
+
+el.prev.addEventListener('click',  () => go(-1));
+el.next.addEventListener('click',  () => go(1));
+el.today.addEventListener('click', () => { view = todayKey(); selected.clear(); S('nav'); paintAll(); });
+
+el.selBtn.addEventListener('click', carrySelected);
+el.carryBtn.addEventListener('click', carry);
+el.undoBtn.addEventListener('click', undo);
+
+el.openBtn.addEventListener('click',   () => { S('tap'); openExisting(); });
+el.newBtn.addEventListener('click',    () => { S('tap'); createNew(); });
+el.grantBtn.addEventListener('click',  () => { S('tap'); grant(); });
+el.unlinkBtn.addEventListener('click', () => { S('tap'); unlink(); });
+el.importBtn.addEventListener('click', () => { S('tap'); importFile(); });
+el.dlBtn.addEventListener('click',     () => { S('tap'); download(); });
+
+el.sndBtn.addEventListener('click', () => {
+  state.settings.sound = !sndOn;
+  applySettings();
+  if (sndOn) Sfx.flip();                 // audible confirmation when switching on
+  touch(); paintAll();                   // Keys becomes enabled/disabled
+});
+el.keysBtn.addEventListener('click', () => setToggle('keys', !keysOn));
+
+document.addEventListener('keydown', e => {
+  /* Option+letter emits a dead-key character on macOS — ⌥T is "†", ⌥W is
+     "∑" — and which character depends on the layout. Matching e.code (the
+     physical key) instead of e.key works on every platform and layout. */
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+    switch (e.code) {
+      case 'KeyT':       e.preventDefault(); cycleTheme(); return;
+      case 'KeyW':       e.preventDefault(); setMode(mode === 'week' ? 'day' : 'week'); return;
+      case 'ArrowLeft':  e.preventDefault(); go(-1); return;
+      case 'ArrowRight': e.preventDefault(); go(1);  return;
+    }
+  }
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+  /* Shift+Enter selects the focused row. preventDefault matters: without
+     it the browser would also activate the button and tick the task. */
+  if (e.shiftKey && e.key === 'Enter') {
+    const sn = lineNav();
+    if (sn && sn.select) { e.preventDefault(); sn.select(); return; }
+  }
+  if (e.key === 'Escape' && selected.size) {
+    e.preventDefault(); selected.clear(); paintAll(); return;
+  }
+
+  /* grid navigation: ↑/↓ between lines, ←/→ between controls on a line */
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && vFree()) {
+    e.preventDefault(); moveV(e.key === 'ArrowDown' ? 1 : -1); return;
+  }
+  if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && hFree()) {
+    e.preventDefault(); moveH(e.key === 'ArrowRight' ? 1 : -1); return;
+  }
+  if (!isField(document.activeElement)) {
+    if (e.key === 'Home') { e.preventDefault(); SM(); focusAt(0, 0); return; }
+    if (e.key === 'End')  { e.preventDefault(); SM(); focusAt(lines.length - 1, 0); return; }
+  }
+
+  if (!isField(document.activeElement)) {
+    if (e.key === 'u' || e.key === 'U') { e.preventDefault(); undo(); return; }
+    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); backToInput(); return; }
+    if (e.key === 'c' || e.key === 'C') {
+      e.preventDefault(); setConfig(el.config.hidden); return;
+    }
+  }
+
+  const nav = lineNav();
+  if (nav) {
+    if (e.key === 'Escape') { e.preventDefault(); backToInput(); return; }
+    if ((e.key === 'e' || e.key === 'E') && nav.edit)   { e.preventDefault(); nav.edit(); return; }
+    if ((e.key === 't' || e.key === 'T') && nav.mark)   { e.preventDefault(); nav.mark(); return; }
+    if (/^[0-9]$/.test(e.key) && nav.pick) { e.preventDefault(); nav.pick(+e.key); return; }
+    if ((e.key === 'Backspace' || e.key === 'Delete') && nav.remove) {
+      e.preventDefault(); nav.remove(); return;
+    }
+  }
+
+  if (e.key === 'Escape' && document.activeElement === el.input) el.input.blur();
+});
+
+// audio contexts need a gesture before they will make a sound
+window.addEventListener('pointerdown', () => Sfx.unlock(), { once:true });
+window.addEventListener('keydown',     () => Sfx.unlock(), { once:true });
+
+/* Left open across midnight, the app should follow the date rather than
+   sit on yesterday holding yesterday's list. */
+let lastDay = todayKey();
+setInterval(() => {
+  const now = todayKey();
+  if (now === lastDay) return;
+  const wasOnToday = view === lastDay;
+  lastDay = now;
+  if (wasOnToday) view = now;
+  autoCarry();
+  paintAll();
+}, 60000);
+
+/* capture phase, so both land before the wrong element sees anything */
+document.addEventListener('pointerdown', onWarpPress, true);
+document.addEventListener('click', onWarpClick, true);
+document.addEventListener('pointermove', e => {
+  if (!dragRange) return;
+  const pt = warpInverse(e.clientX, e.clientY);
+  if (pt) slideTo(dragRange, pt[0]);
+}, true);
+for (const end of ['pointerup', 'pointercancel'])
+  document.addEventListener(end, () => { dragRange = null; }, true);
+
+// last-ditch write if the tab goes away mid-debounce
+window.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+
+/* ══ boot ══════════════════════════════════════════════════════════ */
+/* key is 'pick', never 'theme': a data-theme attribute on a chip would be
+   matched by the theme token selectors and restyle the chip as its own
+   theme, making the selected state unreadable. */
+paintLegend();
+buildSeg(el.themeSeg, THEMES, 'pick', setTheme);
+buildSeg(el.fontSeg,  FONTS,  'pick', setFont);
+paintKeys();
+try {
+  const raw = localStorage.getItem(LS);
+  const doc = raw ? JSON.parse(raw) : null;
+  const kept = JSON.parse(localStorage.getItem(SET_KEY) || 'null');
+  if (doc || kept) {
+    const merged = doc || {};
+    if (kept && typeof kept === 'object')
+      merged.settings = { ...(merged.settings || {}), ...kept };
+    state = normalize(merged);
+  }
+} catch {}
+saveSettings();                  // seed the key on a first run
+applySettings();
+autoCarry();
+setMode(state.settings.mode, true);
+if (mode === 'day') el.input.focus();
+restore();
+})();
+</script>
+</body>
+</html>

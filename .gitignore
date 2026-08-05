@@ -1,0 +1,4 @@
+# Your list is yours — committing it would put your tasks on the open web.
+todo*.json
+
+.DS_Store
