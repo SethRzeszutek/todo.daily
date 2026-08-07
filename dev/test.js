@@ -16,12 +16,14 @@ const RANGE_TYPES = { warpRange:'range' };
 function env({ platform = 'MacIntel', seed = null, kept = null } = {}) {
   let focused = null;
   const links = [];
+  const built = [];                       // every element made, for document queries
   const mk = (tag = 'div') => {
     const e = {
       tagName:tag, type:'', value:'', innerHTML:'', title:'', rel:'', href:'',
       hidden:false, disabled:false, className:'', maxLength:0, isContentEditable:false,
       dataset:{}, children:[], _l:{}, _nav:undefined, _attr:{},
-      style:{ _p:{}, setProperty(k,v){ this._p[k]=v }, removeProperty(k){ delete this._p[k] } },
+      style:{ _p:{}, setProperty(k,v){ this._p[k]=v }, removeProperty(k){ delete this._p[k] },
+              getPropertyValue(k){ return this._p[k] || '' } },
       classList:{ _s:new Set(),
         add(...c){ c.forEach(x=>this._s.add(x)) }, remove(...c){ c.forEach(x=>this._s.delete(x)) },
         toggle(c,f){ f ? this._s.add(c) : this._s.delete(c) }, contains(c){ return this._s.has(c) } },
@@ -59,6 +61,7 @@ function env({ platform = 'MacIntel', seed = null, kept = null } = {}) {
       });
       e.toDataURL = () => 'data:image/png;base64,STUB';
     }
+    built.push(e);
     let tc = '';
     // real DOM: assigning textContent removes all children
     Object.defineProperty(e,'textContent',{ get(){ return tc }, set(v){ tc=String(v); e.children.length=0 }, enumerable:true });
@@ -94,7 +97,16 @@ function env({ platform = 'MacIntel', seed = null, kept = null } = {}) {
   global.localStorage = { getItem:k=>store.has(k)?store.get(k):null,
     setItem:(k,v)=>store.set(k,String(v)), removeItem:k=>store.delete(k) };
   global.navigator = { platform, userAgent:platform };
+  /* enough of a selector engine for what the app asks of the document:
+     a bare tag, a class, or an id */
+  const matches = (n, sel) => sel.startsWith('.') ? String(n.className||'').split(/\s+/).includes(sel.slice(1))
+                            : sel.startsWith('#') ? n.id === sel.slice(1)
+                            : String(n.tagName||'').toLowerCase() === sel.toLowerCase();
+  const queryAll = sel => built.filter(n => sel.split(',').some(one => matches(n, one.trim())));
+
   global.document = { documentElement:mk('html'), head:mk('head'),
+    querySelectorAll:sel => queryAll(sel),
+    querySelector:sel => queryAll(sel)[0] || null,
     get activeElement(){ return focused },
     getElementById:i=>reg.get(i)||null, createElement:t=>mk(t),
     createTextNode:t=>({ nodeValue:t, textContent:t }),
@@ -183,7 +195,8 @@ function env({ platform = 'MacIntel', seed = null, kept = null } = {}) {
     fire2: (id, type, ev) => ((reg.get(id)||{_l:{}})._l[type]||[]).forEach(f => f(ev)),
     saved: () => store.has('todo.daily.v1'),
     press: (key, o = {}) => (docL.keydown||[]).forEach(f => f({ key, code:o.code||key,
-      altKey:!!o.alt, ctrlKey:false, metaKey:false, shiftKey:!!o.shift, preventDefault(){} })),
+      altKey:!!o.alt, ctrlKey:!!o.ctrl, metaKey:!!o.meta, shiftKey:!!o.shift,
+      preventDefault(){} })),
     fire: (id, type) => ((reg.get(id)||{_l:{}})._l[type]||[]).forEach(f => f({ preventDefault(){} })),
     click: (n, o={}) => (n._l.click||[]).forEach(f => f({ preventDefault(){}, ...o })),
     addTask: t => { reg.get('input').value = t;
@@ -435,8 +448,9 @@ for (const [plat, expect] of [['MacIntel','⌥W'], ['Win32','Alt+W']]) {
   // arrows must cross the colour row even though the swatches are inputs
   t.setFocus(t.el('colLight')); t.press('ArrowRight');
   ok('right crosses swatches', t.focused()===t.el('colDark'));
-  t.press('ArrowRight'); t.press('ArrowRight');
-  ok('reaches reset',          t.focused()===t.el('colReset'));
+  for (let i = 0; i < 6 && t.focused() !== t.el('colReset'); i++) t.press('ArrowRight');
+  ok('reaches reset',          t.focused()===t.el('colReset'),
+     t.focused() && (t.focused().id || t.focused().className));
 }
 
 /* ══ layout ══ */
@@ -948,6 +962,418 @@ for (const [plat, expect] of [['MacIntel','⌥W'], ['Win32','Alt+W']]) {
   }
 }
 
+/* ══ control schemes ══ */
+{
+  S('control schemes');
+  const t = env();
+  const pick = id => { t.click([...t.el('ctrlSeg').children].find(b => b.dataset.pick === id)); };
+  const legend = () => t.flat(t.el('note'));
+
+  ok('three schemes offered', t.el('ctrlSeg').children.length === 3,
+     [...t.el('ctrlSeg').children].map(b => b.textContent).join('/'));
+  ok('default is selected at boot',
+     t.doc().settings.controls === undefined || t.doc().settings.controls === 'default');
+
+  /* default keeps the original letters */
+  t.addTask('alpha');
+  const task = () => t.doc().days[Object.keys(t.doc().days)[0]].tasks[0];
+  t.setFocus(t.rows()[0].box);
+  t.press('t'); ok('default: T marks', task().mark === 'urgent', String(task().mark));
+
+  /* ── vim ── */
+  pick('vim');
+  ok('vim is stored', t.doc().settings.controls === 'vim');
+  ok('and kept in the browser key too',
+     JSON.parse(t.store.get('todo.daily.settings')).controls === 'vim');
+  ok('legend advertises J/K', /J/.test(legend()) && /K/.test(legend()), legend().slice(0, 44));
+  ok('legend advertises I for edit', /I edit/.test(legend()));
+
+  t.setFocus(t.rows()[0].box);
+  t.press('m'); ok('vim: M marks', task().mark === 'priority', String(task().mark));
+  t.press('t'); ok('vim: T no longer marks', task().mark === 'priority', String(task().mark));
+
+  /* opened so there is always a line below the task row, whatever the
+     layout happens to be */
+  if (t.el('config').hidden) t.click(t.el('cfgBtn'));
+  t.setFocus(t.rows()[0].box);
+  const home = t.focused();
+  t.press('j'); ok('vim: J moves down a line', t.focused() !== home);
+  t.press('k'); ok('vim: K comes back',        t.focused() === home);
+  t.press('l'); ok('vim: L moves across a line', t.focused() !== home);
+
+  /* motion must not park in a text field: plain letters type there, so the
+     cursor would have nothing left to move it with */
+  t.setFocus(t.rows()[0].box);
+  const fields = [t.el('input'), t.el('goalText')];
+  let landedInField = false;
+  for (let i = 0; i < 14; i++) { t.press('j'); if (fields.includes(t.focused())) landedInField = true; }
+  for (let i = 0; i < 14; i++) { t.press('k'); if (fields.includes(t.focused())) landedInField = true; }
+  ok('vim: motion never lands in a text field', !landedInField,
+     t.focused() && (t.focused().id || t.focused().className));
+
+  t.setFocus(t.rows()[0].box);
+  const day = t.flat(t.el('date'));
+  t.press(']'); ok('vim: ] moves a day forward', t.flat(t.el('date')) !== day);
+  ok('and the repaint kept the cursor out of the entry field',
+     !fields.includes(t.focused()), t.focused() && (t.focused().id || t.focused().className));
+  t.press('['); ok('vim: [ moves back', t.flat(t.el('date')) === day, t.flat(t.el('date')));
+  ok('back on the day that has the task', t.rows().length === 1, `${t.rows().length} rows`);
+
+  t.setFocus(t.rows()[0].box);
+  const cfg0 = t.el('config').hidden;
+  t.press(','); ok('vim: comma toggles config', t.el('config').hidden !== cfg0);
+  t.press(','); ok('and toggles it back',       t.el('config').hidden === cfg0);
+
+  /* ── emacs ── */
+  pick('emacs');
+  ok('emacs is stored', t.doc().settings.controls === 'emacs');
+  ok('legend advertises the control motions', /N/.test(legend()) && /P/.test(legend()));
+
+  if (t.el('config').hidden) t.click(t.el('cfgBtn'));
+  t.setFocus(t.rows()[0].box);
+  const at = t.focused();
+  t.press('n', { ctrl:true }); ok('emacs: C-n moves down', t.focused() !== at);
+  t.press('p', { ctrl:true }); ok('emacs: C-p comes back', t.focused() === at);
+  t.press('f', { ctrl:true }); ok('emacs: C-f moves across', t.focused() !== at);
+  t.setFocus(t.rows()[0].box);
+  t.press('t'); ok('emacs: plain letters still work', !!task().mark);
+
+  /* plain letters must not fire while typing, or the list would jump around
+     as you write a task; a modified binding still may */
+  pick('vim');
+  t.setFocus(t.el('input'));
+  const cfgWas = t.el('config').hidden;
+  t.press('j'); t.press(','); t.press('x');
+  ok('plain letters are inert in a text field', t.el('config').hidden === cfgWas);
+  pick('emacs');
+  t.setFocus(t.el('input'));
+  t.press('o', { ctrl:true });
+  ok('a modified binding still reaches the app from a field',
+     t.focused() === t.el('input'));
+
+  /* rubbish falls back rather than leaving the app unbound */
+  const t2 = env({ seed: { version:4, days:{}, goals:[], settings:{ controls:'dvorak' } } });
+  ok('an unknown scheme falls back to default',
+     JSON.parse(t2.store.get('todo.daily.settings')).controls === 'default');
+  ok('the arrows are bound in every scheme',
+     /↑/.test(t2.flat(t2.el('note'))) && /←/.test(t2.flat(t2.el('note'))));
+}
+
+/* ══ schemes across platforms ══ */
+for (const [plat, mac] of [['MacIntel', true], ['Win32', false]]) {
+  S(`scheme keys — ${plat}`);
+  const t = env({ platform: plat });
+  t.click(t.el('cfgBtn'));
+  t.click([...t.el('ctrlSeg').children].find(b => b.dataset.pick === 'emacs'));
+  const legend = t.flat(t.el('note'));
+
+  ok('modifiers are written the platform way',
+     mac ? /⌃P/.test(legend) : /Ctrl\+P/.test(legend), legend.slice(0, 40));
+
+  /* Chrome will not let a page cancel Ctrl+N or Ctrl+O off macOS, so those
+     must not be advertised there */
+  ok('reserved browser combos are not offered off macOS',
+     mac ? /⌃N/.test(legend) : (!/Ctrl\+N/.test(legend) && /Alt\+N/.test(legend)),
+     legend.slice(0, 60));
+  ok('and the substitute is bound, not just printed',
+     /(⌃|Ctrl\+|Alt\+)N/.test(legend));
+
+  t.addTask('alpha');
+  t.setFocus(t.rows()[0].box);
+  const from = t.focused();
+  if (mac) t.press('n', { ctrl:true });
+  else     t.press('n', { alt:true, code:'KeyN' });
+  ok('the platform motion key moves the cursor', t.focused() !== from,
+     `${from && (from.id||from.className)} -> ${t.focused() && (t.focused().id||t.focused().className)}`);
+
+  /* the arrows are the fallback everywhere, whatever the browser reserves */
+  t.setFocus(t.rows()[0].box);
+  const home = t.focused();
+  t.press('ArrowDown');
+  ok('arrows still work regardless of scheme', t.focused() !== home);
+}
+
+/* ══ blink ══ */
+{
+  S('blink');
+  const t = env();
+  ok('off by default', t.doc().settings.blink !== true);
+  ok('no class until asked', document.documentElement.classList.contains('blink') === false);
+
+  t.click(t.el('cfgBtn'));
+  t.click(t.el('blinkBtn'));
+  ok('the class drives it', document.documentElement.classList.contains('blink'));
+  ok('stored in the document',   t.doc().settings.blink === true);
+  ok('and in the browser key',   JSON.parse(t.store.get('todo.daily.settings')).blink === true);
+  ok('the chip reads back',      t.el('blinkBtn').textContent === 'Blink ●',
+     t.el('blinkBtn').textContent);
+
+  /* every button gets its own phase and cycle, or they would blink in step */
+  const btns = document.querySelectorAll('button').filter(b => b.style.getPropertyValue('--lamp'));
+  ok('buttons are seeded', btns.length > 8, `${btns.length} seeded`);
+  const delays = new Set(btns.map(b => b.style.getPropertyValue('--lamp')));
+  const durs   = new Set(btns.map(b => b.style.getPropertyValue('--lamp-dur')));
+  ok('phases differ',  delays.size > Math.min(5, btns.length - 1), `${delays.size} distinct`);
+  /* count only the lamps that run: the rest share the 0s opt-out */
+  const liveDurs = btns.map(b => b.style.getPropertyValue('--lamp-dur'))
+                       .filter(d => parseFloat(d) > 0);
+  ok('live cycles are not in lockstep',
+     liveDurs.length < 2 || new Set(liveDurs).size > 1,
+     `${new Set(liveDurs).size} distinct of ${liveDurs.length} live`);
+  ok('phases are negative, so nothing waits a whole cycle to first blink',
+     [...delays].every(d => d.startsWith('-')), [...delays][0]);
+  /* a lamp either runs a long cycle or opts out with 0s; nothing strobes */
+  const live = [...durs].filter(d => parseFloat(d) > 0);
+  ok('cycles run for tens of seconds, not strobing',
+     live.every(d => parseFloat(d) >= 20 && parseFloat(d) <= 52),
+     live.slice(0, 3).join(', '));
+  ok('and some buttons sit steady, so the panel is not all lamps',
+     durs.has('0s'), `${[...durs].length} distinct, steady present: ${durs.has('0s')}`);
+  const steady = btns.filter(b => b.style.getPropertyValue('--lamp-dur') === '0s').length;
+  ok('roughly half take part', steady > 0 && steady < btns.length,
+     `${btns.length - steady} of ${btns.length} blink`);
+
+  /* lamps are not identical: depth varies, and a few stutter rather than
+     giving one clean blink */
+  const dips = new Set(btns.map(b => b.style.getPropertyValue('--lamp-dip')));
+  ok('dip depth varies per lamp', dips.size > 1, `${dips.size} distinct depths`);
+  ok('depths stay shallow enough to read as a blink, not a blackout',
+     [...dips].every(d => parseFloat(d) >= 0.28 && parseFloat(d) <= 0.55),
+     [...dips].slice(0, 3).join(', '));
+  ok('only lamps that run can stutter',
+     btns.filter(b => b.classList.contains('stutter'))
+         .every(b => parseFloat(b.style.getPropertyValue('--lamp-dur')) > 0));
+  /* slice out a keyframes block by finding what follows it, since a regex
+     stops at the first inner brace */
+  const frames = name => {
+    const from = t.css.indexOf(`@keyframes ${name}{`);
+    if (from < 0) return '';
+    const ends = [t.css.indexOf('@keyframes', from + 1), t.css.indexOf(':root.blink', from + 1)]
+                   .filter(i => i > from);
+    return t.css.slice(from, ends.length ? Math.min(...ends) : undefined);
+  };
+  const dipsIn = name => (frames(name).match(/--lamp-dip/g) || []).length;
+  ok('a plain lamp dips once', dipsIn('lamp') === 1, `${dipsIn('lamp')} dips`);
+  ok('a stutter dips twice',   dipsIn('lampstutter') === 2, `${dipsIn('lampstutter')} dips`);
+  /* a gradient names its colour twice, so count the lit stops, not the vars */
+  const litsIn = name => (frames(name).match(/background-image:linear-gradient/g) || []).length;
+  ok('the tint flavours mirror the dim ones',
+     litsIn('lamptint') === 1 && litsIn('lamptintstutter') === 2,
+     `tint ${litsIn('lamptint')}, stutter ${litsIn('lamptintstutter')}`);
+
+  /* a repaint must not restart every lamp together */
+  const before = t.el('cfgBtn').style.getPropertyValue('--lamp');
+  t.addTask('something');
+  ok('a repaint leaves existing lamps alone',
+     t.el('cfgBtn').style.getPropertyValue('--lamp') === before);
+  const fresh = document.querySelectorAll('button')
+    .filter(b => !b.id && b.style.getPropertyValue('--lamp'));
+  ok('and seeds the buttons it just built', fresh.length > 0, `${fresh.length} new`);
+
+  t.click(t.el('blinkBtn'));
+  ok('switching off drops the class', document.documentElement.classList.contains('blink') === false);
+  ok('and is remembered off', t.doc().settings.blink === false);
+
+  ok('disabled controls are left out of it',
+     /:root\.blink button:not\(:disabled\)/.test(t.css));
+
+  /* ── a colour, when you pick one ── */
+  const t2 = env();
+  t2.click(t2.el('cfgBtn'));
+  t2.click(t2.el('blinkBtn'));
+  ok('no colour set to begin with', t2.doc().settings.blinkColor === null,
+     String(t2.doc().settings.blinkColor));
+  ok('so it dims rather than tints',
+     document.documentElement.classList.contains('blink-tint') === false &&
+     t2.prop('--blink-lit') === undefined);
+
+  t2.el('colBlink').value = '#ff9d00';
+  t2.fire2('colBlink', 'input', { target: t2.el('colBlink') });
+  ok('the colour is stored', t2.doc().settings.blinkColor === '#ff9d00',
+     String(t2.doc().settings.blinkColor));
+  ok('and kept in the browser key',
+     JSON.parse(t2.store.get('todo.daily.settings')).blinkColor === '#ff9d00');
+  ok('the tint takes over', document.documentElement.classList.contains('blink-tint'));
+  ok('lit and dim tones both derive from it',
+     /#ff9d00/.test(t2.prop('--blink-lit') || '') && /#ff9d00/.test(t2.prop('--blink-dim') || ''),
+     `${t2.prop('--blink-lit')} / ${t2.prop('--blink-dim')}`);
+  ok('the lit tone is the stronger of the two',
+     parseInt(t2.prop('--blink-lit').match(/(\d+)%/)[1], 10) >
+     parseInt(t2.prop('--blink-dim').match(/(\d+)%/)[1], 10),
+     `${t2.prop('--blink-lit')} vs ${t2.prop('--blink-dim')}`);
+  ok('the tint keyframes only touch background-image, not the chip shadow',
+     /@keyframes lamptint\{[\s\S]*?\}\s*\n\s*:root\.blink\.blink-tint/.test(t2.css) &&
+     !/@keyframes lamptint\{[^@]*box-shadow/.test(t2.css));
+
+  /* rubbish is refused rather than written through */
+  t2.el('colBlink').value = 'not-a-colour';
+  t2.fire2('colBlink', 'input', { target: t2.el('colBlink') });
+  ok('a bad value clears rather than sticking', t2.doc().settings.blinkColor === null);
+  ok('and the dim blink comes back',
+     document.documentElement.classList.contains('blink-tint') === false);
+
+  /* Reset puts it back to colourless along with the rest */
+  t2.el('colBlink').value = '#33ff77';
+  t2.fire2('colBlink', 'input', { target: t2.el('colBlink') });
+  ok('set again', t2.doc().settings.blinkColor === '#33ff77');
+  t2.click(t2.el('colReset'));
+  ok('Reset clears the blink colour too', t2.doc().settings.blinkColor === null);
+  ok('and drops the tint class', document.documentElement.classList.contains('blink-tint') === false);
+  ok('while leaving the blink itself on', t2.doc().settings.blink === true);
+  ok('the swatch still shows a colour to start from',
+     /^#[0-9a-f]{6}$/i.test(t2.el('colBlink').value), t2.el('colBlink').value);
+  /* whatever lamp variants exist, every one of them must be switched off
+     under reduced motion — checked by comparing the two lists, so adding a
+     flavour and forgetting the media query fails here */
+  const lampRules = [...t2.css.matchAll(/(:root\.blink[^,{]*?)\{\s*\n?\s*animation:lamp/g)]
+                      .map(m => m[1].trim());
+  const rmBlock = (t2.css.match(/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?animation:none;/) || [''])[0];
+  ok('there are several lamp variants to cover', lampRules.length >= 4, `${lampRules.length} rules`);
+  ok('reduced motion switches off every one of them',
+     lampRules.every(r => rmBlock.includes(r)),
+     lampRules.filter(r => !rmBlock.includes(r)).join(' | ') || 'all covered');
+}
+
+/* ══ meltdown ══ */
+{
+  S('meltdown');
+  /* frequencies as the app defines them, so the interval checks below are
+     against the shipped table rather than a second copy of it */
+  const NOTEHZ = name => {
+    const tbl = (HTML.match(/const NOTE = \{([^}]*)\}/) || ['',''])[1];
+    // the table quotes its keys, since some note names carry a sharp
+    const m = tbl.match(new RegExp("'?" + name + "'?\\s*:\\s*(\\d+)"));
+    return m ? +m[1] : NaN;
+  };
+  const t = env();
+  const melted = () => document.documentElement.classList.contains('melt');
+  const spam = k => { for (let i = 0; i < k; i++) t.click(t.el('cfgBtn')); };
+
+  ok('nothing melting to begin with', melted() === false);
+  spam(6);
+  ok('six taps is just using the drawer', melted() === false);
+  spam(1);
+  ok('the seventh trips it', melted() === true);
+  ok('and the ice cream van turns up', t.osc().some(o => o.freq >= 380 && o.freq <= 1100),
+     `${t.osc().length} oscillators`);
+  ok('the tune is square waves, not the click voice',
+     t.osc().filter(o => o.freq >= 380).every(o => o.type === 'square'));
+
+  /* the drawer must keep working underneath */
+  const openNow = t.el('config').hidden === false;
+  t.click(t.el('cfgBtn'));
+  ok('config still toggles while melted', (t.el('config').hidden === false) !== openNow);
+
+  ok('nothing about it is saved',
+     t.doc().settings.melt === undefined && !/melt/.test(t.store.get('todo.daily.settings')));
+
+  t.press('Escape');
+  ok('Escape mops it up', melted() === false);
+  ok('and the tap count is cleared, so one more click does not re-trip it',
+     (t.click(t.el('cfgBtn')), melted() === false));
+
+  /* a slow hand never trips it */
+  const t2 = env();
+  let now = 1e12;
+  const realNow = Date.now;
+  Date.now = () => now;
+  for (let i = 0; i < 10; i++) { t2.click(t2.el('cfgBtn')); now += 900; }
+  ok('ten unhurried clicks stay quiet', melted() === false);
+  Date.now = realNow;
+
+  /* muted means muted, even for an easter egg */
+  const t3 = env();
+  t3.click(t3.el('cfgBtn'));
+  t3.click(t3.el('sndBtn'));                 // sound off
+  t3.quiet();
+  for (let i = 0; i < 8; i++) t3.click(t3.el('cfgBtn'));
+  ok('it still melts with the sound off', document.documentElement.classList.contains('melt'));
+  ok('but stays silent', t3.osc().length === 0, `${t3.osc().length} oscillators`);
+
+  ok('reduced motion sits it out',
+     /:root\.melt #screen,:root\.melt \.fx-melt/.test(t.css));
+  ok('the wash is hot pink and mint',
+     /#ff2ec4/.test(t.css) && /#4dffc3/.test(t.css));
+
+  /* the UI itself repaints, not just an overlay: --bg and --fg are what
+     every other token mixes off */
+  const trip = (t.css.match(/@keyframes melttrip\{[\s\S]*?\n  \}/) || [''])[0];
+  ok('there is a token animation at all', trip.length > 0);
+  const grounds = new Set(trip.match(/--bg:#[0-9a-f]{6}/g) || []);
+  const inks    = new Set(trip.match(/--fg:#[0-9a-f]{6}/g) || []);
+  ok('it flips through several grounds', grounds.size >= 6, `${grounds.size} grounds`);
+  ok('and several inks',                 inks.size >= 4,   `${inks.size} inks`);
+  ok('every stop sets both, so nothing is left half-recoloured',
+     (trip.match(/--bg:/g) || []).length === (trip.match(/--fg:/g) || []).length);
+
+  /* it must be an animation on :root — a plain class rule would lose to the
+     inline tone overrides the colour pickers write */
+  ok('the token flips run as an animation on the root',
+     /:root\.melt\{ animation:melttrip/.test(t.css));
+  ok('and step rather than fade between colours',
+     /animation:melttrip [\d.]+s steps\(1,end\)/.test(t.css));
+
+  ok('nothing is blurred any more',
+     !/@keyframes meltsag\{[\s\S]*?blur/.test(t.css));
+  const sag = (t.css.match(/@keyframes meltsag\{[\s\S]*?\n  \}/) || [''])[0];
+  ok('the saturation stays', /saturate/.test(sag));
+  ok('it pulls on both axes, not just downward',
+     /scale\(\s*[\d.]+\s*,\s*[\d.]+/.test(sag), (sag.match(/scale\([^)]*\)/) || [''])[0]);
+  ok('and skews, rotates and shifts as well',
+     /skewX/.test(sag) && /skewY/.test(sag) && /rotate/.test(sag) && /translate\(/.test(sag));
+  ok('the origin wanders, so it does not always hang from one point',
+     new Set(sag.match(/transform-origin:[^;]+/g) || []).size >= 4,
+     `${new Set(sag.match(/transform-origin:[^;]+/g) || []).size} origins`);
+  ok('it squeezes as well as stretches',
+     (sag.match(/scale\(\s*(\.\d+)/g) || []).length > 0, 'some stops scale below 1');
+  ok('a stretching stage cannot add scrollbars',
+     /:root\.melt\{[^}]*overflow:hidden/.test(t.css));
+
+  /* Pinned against the transcription, note for note, because this melody has
+     already been wrong twice:
+         pickup D B | G G G D | G A B G | A A A E | A B c A, played twice */
+  const pass = (t.html.match(/const TUNE = \[[\s\S]*?\];/) || [''])[0];
+  const notes = (pass.match(/'[A-G][#b]?\d'/g) || []).map(x => x.slice(1, -1));
+  const beats = (pass.match(/,([\d.]+)\]/g) || []).map(x => parseFloat(x.slice(1)));
+  ok('the pickup is B then A, both eighths',
+     notes.slice(0, 2).join(' ') === 'B5 A5' && beats.slice(0, 2).join(' ') === '1 1',
+     `${notes.slice(0, 2).join(' ')} / ${beats.slice(0, 2).join(' ')}`);
+  ok('bar 1 is G F# G A, G, B, C',
+     notes.slice(2, 9).join(' ') === 'G5 F#5 G5 A5 G5 B4 C5', notes.slice(2, 9).join(' '));
+  ok('a bare letter is a quarter, so that G is worth two eighths',
+     beats[6] === 2, `G is ${beats[6]} eighths`);
+  ok('the key signature sharpens the F', notes.includes('F#5'));
+  ok('the comma drops that B an octave', NOTEHZ('B4') < NOTEHZ('G5'));
+
+  /* 4/4 means every bar totals four beats. If the note lengths were misread
+     the bars would not add up, so this is the real check on the parse. */
+  const bars = [[2,9],[9,16],[16,22],[22,27]].map(([f, t2]) =>
+    beats.slice(f, t2).reduce((x, y) => x + y, 0) / 2);
+  ok('every bar comes to four beats', bars.every(b => b === 4), bars.join(' | '));
+  ok('the pickup is the odd beat that completes the last bar',
+     beats.slice(0, 2).reduce((x, y) => x + y, 0) / 2 === 1);
+  ok('it is the pickup and four bars', notes.length === 27, `${notes.length} notes`);
+
+  /* Timing is a guess and has been wrong once, so the arithmetic at least is
+     pinned: swing must not change the length, and the tune must fit inside
+     the meltdown or it gets cut off mid-phrase. */
+  const beat  = parseFloat((t.html.match(/const BEAT = ([\d.]+)/) || [])[1]);
+  const swing = parseFloat((t.html.match(/SWING = ([\d.]+)/) || [])[1]);
+  const hold  = parseFloat((t.html.match(/MELT_HOLD = (\d+)/) || [])[1]) / 1000;
+  const units = beats.reduce((a, b) => a + b, 0);
+  ok('straight eighths, as a van chip plays it', swing === 0, `swing ${swing}`);
+  ok('the tune finishes before the melt does', units * beat <= hold,
+     `${(units * beat).toFixed(2)}s of tune, ${hold}s of melt`);
+  ok('the quarter note lands in a plausible range for the tune',
+     60 / (beat * 2) >= 100 && 60 / (beat * 2) <= 180, `${Math.round(60 / (beat * 2))} BPM`);
+
+  /* the wash is lighter now the UI recolours itself, or it turns to mud */
+  const wash = (t.css.match(/@keyframes meltwash\{[^}]*\}/) || [''])[0];
+  ok('the overlay sits back to let the UI show',
+     (wash.match(/opacity:\.(\d+)/g) || []).every(o => parseFloat('0' + o.slice(8)) <= 0.5),
+     wash.replace(/\s+/g, ' ').slice(0, 60));
+}
+
 /* ══ progress bar width ══ */
 {
   S('progress bar');
@@ -1157,7 +1583,12 @@ for (const [plat, expect] of [['MacIntel','⌥W'], ['Win32','Alt+W']]) {
                                 phases.join(' '));
   const STEP = parseFloat(t.html.match(/SWEEP_STEP = ([\d.]+)/)[1]);
   const gap = Math.abs(phases[0] - phases[1]);
-  ok('stagger is one step',    Math.abs(gap - STEP) < 0.001, `${gap.toFixed(3)} vs ${STEP}`);
+  /* phases are written to 3dp, so a gap between two of them can be off by
+     one rounding step even when the clock is shared */
+  ok('stagger is one step',    Math.abs(gap - STEP) <= 0.0011, `${gap.toFixed(3)} vs ${STEP}`);
+  ok('all rows in a paint share one clock reading',
+     /sweepNow = Date\.now\(\);/.test(t.html) &&
+     /\(\(\(sweepNow \|\| Date\.now\(\)\)/.test(t.html));
 
   // the wave keeps its place across a repaint rather than snapping back
   const before = parseFloat(t.rows()[0].li.style._p['--sweep']);

@@ -664,7 +664,113 @@
     :root[data-theme^="modern"] .bar h1{ letter-spacing:.18em; }
     .wdh .wcells{ display:none; }
   }
+  /* Spam the config button and the whole thing gives up: the tube sags,
+     the picture goes hot pink and mint, and an ice cream van pulls up. It
+     touches nothing that is saved and clears itself. */
+  .fx-melt{
+    position:fixed;inset:-10%;z-index:200;pointer-events:none;display:none;
+    background:
+      radial-gradient(60% 60% at 25% 20%, #ff2ec4 0%, transparent 70%),
+      radial-gradient(70% 70% at 80% 75%, #4dffc3 0%, transparent 72%),
+      linear-gradient(160deg, #ff2ec4 0%, #4dffc3 100%);
+    mix-blend-mode:hard-light;opacity:0;
+  }
+  :root.melt .fx-melt{ display:block;animation:meltwash 8s ease-in-out forwards; }
+  :root.melt #screen{ animation:meltsag 8s cubic-bezier(.3,0,.7,1) forwards;transform-origin:50% 0; }
+  /* The UI repaints in the same two colours rather than only being washed
+     over: --bg and --fg are what every other token mixes off, so flipping
+     those two takes the panel, hairlines, marks and text with them. An
+     animation outranks the inline tone overrides, which a class could not.
+     Custom properties step between keyframes rather than interpolating,
+     and the hard flips are the point. */
+  @keyframes melttrip{
+    0%, 100%{ --bg:#14001c; --fg:#ff2ec4; }
+    11%     { --bg:#001f19; --fg:#4dffc3; }
+    23%     { --bg:#2a0033; --fg:#ffd6f5; }
+    35%     { --bg:#00231c; --fg:#ff2ec4; }
+    47%     { --bg:#1a0026; --fg:#4dffc3; }
+    58%     { --bg:#002a20; --fg:#ff9cf0; }
+    69%     { --bg:#20002c; --fg:#8affd8; }
+    80%     { --bg:#001b16; --fg:#ff2ec4; }
+    90%     { --bg:#26002e; --fg:#4dffc3; }
+  }
+  :root.melt{ animation:melttrip 8s steps(1,end) forwards;overflow:hidden; }
+  @keyframes meltwash{
+    0%{ opacity:0; } 18%{ opacity:.34; } 70%{ opacity:.42; } 100%{ opacity:0; }
+  }
+  /* It pulls in whatever direction it feels like: both axes, both skews, a
+     little rotation, and a wandering origin so the stretch does not always
+     hang from the same point. */
+  @keyframes meltsag{
+    0%  { transform:none;filter:none;transform-origin:50% 0; }
+    14% { transform:scale(1.05,1.08) skewX(-2.6deg) rotate(-.7deg);
+          filter:saturate(1.8);transform-origin:30% 10%; }
+    29% { transform:scale(.93,1.19) skewY(2deg) translate(-2%,1%) rotate(1deg);
+          filter:saturate(2.2);transform-origin:70% 0; }
+    44% { transform:scale(1.14,1.04) skewX(3.4deg) skewY(-1.4deg) translate(2.5%,2%);
+          filter:saturate(2.5);transform-origin:20% 40%; }
+    58% { transform:scale(.88,1.32) skewX(-4deg) translate(-2.5%,3%) rotate(-1.6deg);
+          filter:saturate(2.6);transform-origin:80% 20%; }
+    72% { transform:scale(1.18,1.1) skewY(3deg) translate(2%,4%) rotate(1.4deg);
+          filter:saturate(2.5);transform-origin:40% 60%; }
+    86% { transform:scale(.95,1.26) skewX(2.4deg) skewY(-2deg) translate(-1.5%,2%) rotate(-.8deg);
+          filter:saturate(2.2);transform-origin:60% 30%; }
+    100%{ transform:none;filter:none;transform-origin:50% 0; }
+  }
+
+  /* Lamps: a panel of indicators where one blinks now and then, rather than
+     everything pulsing together. Each button carries its own cycle length
+     and start offset, so the flicker lands irregularly. It sits in the last
+     slice of a long cycle, which is what makes a blink occasional rather
+     than a throb, and steps() keeps the edges hard like a real lamp. */
+  /* Two flavours, because a panel of identical lamps reads as a machine and
+     a panel of mismatched ones reads as hardware: most give one clean blink,
+     a few stutter like a loose contact. Depth is per lamp too. steps() keeps
+     every edge hard — a fade would look like a modern pulse. */
+  @keyframes lamp{
+    0%, 99.2%, 100%{ opacity:1; }
+    99.4%          { opacity:var(--lamp-dip, .35); }
+  }
+  @keyframes lampstutter{
+    0%, 98.8%, 100%{ opacity:1; }
+    99.0%          { opacity:var(--lamp-dip, .35); }
+    99.25%         { opacity:1; }
+    99.6%          { opacity:calc(var(--lamp-dip, .35) + .28); }
+  }
+  :root.blink button:not(:disabled){
+    animation:lamp var(--lamp-dur, 9s) steps(1,end) var(--lamp, 0s) infinite;
+  }
+  :root.blink button.stutter:not(:disabled){
+    animation:lampstutter var(--lamp-dur, 9s) steps(1,end) var(--lamp, 0s) infinite;
+  }
+
+  /* Given a colour, the lamp lights up in it instead of dimming. The overlay
+     is a flat background-image: that leaves the chip's own background colour
+     and its shadow alone — so a pressed chip stays pressed — and paints
+     under the label rather than over it. */
+  @keyframes lamptint{
+    0%, 99.2%, 100%{ background-image:none; }
+    99.4%          { background-image:linear-gradient(var(--blink-lit), var(--blink-lit)); }
+  }
+  @keyframes lamptintstutter{
+    0%, 98.8%, 100%{ background-image:none; }
+    99.0%          { background-image:linear-gradient(var(--blink-lit), var(--blink-lit)); }
+    99.25%         { background-image:none; }
+    99.6%          { background-image:linear-gradient(var(--blink-dim), var(--blink-dim)); }
+  }
+  :root.blink.blink-tint button:not(:disabled){
+    animation:lamptint var(--lamp-dur, 9s) steps(1,end) var(--lamp, 0s) infinite;
+  }
+  :root.blink.blink-tint button.stutter:not(:disabled){
+    animation:lamptintstutter var(--lamp-dur, 9s) steps(1,end) var(--lamp, 0s) infinite;
+  }
+
   @media (prefers-reduced-motion:reduce){
+    :root.melt,:root.melt #screen,:root.melt .fx-melt,
+    :root.blink button:not(:disabled),
+    :root.blink button.stutter:not(:disabled),
+    :root.blink.blink-tint button:not(:disabled),
+    :root.blink.blink-tint button.stutter:not(:disabled){ animation:none; }
     .led.on,.cursor,:root.sweep li.open::before,
     :root.crt.crt-roll .fx-scan,:root.crt .fx-flick,:root.crt.crt-roll .fx-roll{ animation:none; }
     *{ transition:none !important; }
@@ -817,6 +923,7 @@
           <label class="cpick">Light <input type="color" id="colLight" aria-label="Light tone"></label>
           <label class="cpick">Dark <input type="color" id="colDark" aria-label="Dark tone"></label>
           <label class="cpick">Marks <input type="color" id="colMark" aria-label="Mark hue"></label>
+          <label class="cpick">Blink <input type="color" id="colBlink" aria-label="Blink colour"></label>
           <button class="chip" id="colReset" title="Back to the theme's own colours">Reset</button>
         </div>
       </div>
@@ -832,6 +939,11 @@
       </div>
 
       <div class="row">
+        <span class="lbl">Controls</span>
+        <div class="seg" id="ctrlSeg" role="group" aria-label="Controls"></div>
+      </div>
+
+      <div class="row">
         <span class="lbl">Display</span>
         <div class="seg">
           <button class="chip" id="glowBtn" aria-pressed="false"
@@ -840,6 +952,8 @@
                   title="Stepped light sweeping through unfinished rows">Sweep ●</button>
           <button class="chip" id="hintsBtn" aria-pressed="true"
                   title="Show the keyboard shortcut line">Hints ●</button>
+          <button class="chip" id="blinkBtn" aria-pressed="false"
+                  title="Buttons blink now and then, like lamps on a panel">Blink ○</button>
         </div>
       </div>
 
@@ -869,7 +983,7 @@
         <span class="status"><span class="txtline dim" id="hint">Writes on every keystroke</span></span>
         <div class="seg">
           <button class="chip" id="sndBtn" aria-pressed="true">Sound ●</button>
-          <button class="chip" id="keysBtn" aria-pressed="true">Keys ●</button>
+          <button class="chip" id="keysBtn" aria-pressed="true">Typing ●</button>
         </div>
       </div>
     </div>
@@ -886,6 +1000,7 @@
     <span class="fx-roll"></span>
   </div>
 </div><!-- /#screen -->
+  <div class="fx-melt" id="fxMelt" aria-hidden="true"></div>
   <div class="fx" aria-hidden="true">
     <span class="fx-vig"></span>
     <span class="fx-flick"></span>
@@ -1071,6 +1186,39 @@ const Sfx = (() => {
     move(){    click(0, {gain:.038,freq:4400,dur:.006,bGain:.012,bFreq:430,bDur:.008}); },
     /* one notch of a slider */
     tick(){    click(0, {gain:.085,freq:3200,q:1.2,dur:.010,bGain:.030,bFreq:300,bDur:.012}); },
+    /* Turkey in the Straw, from the Nottingham Music Database setting
+       (X:91, S:Kevin Briggs). M:4/4 L:1/4 K:G, so a bare letter is a
+       QUARTER and X/2 is an eighth — which is the bit that was wrong
+       before, when everything was played evenly.
+
+           B/2A/2 | G/2F/2G/2A/2 G B,/2C/2 | D/2E/2D/2B,/2 D G/2A/2
+                  | B B B/2A/2G/2A/2       | B A A B/2A/2
+
+       That is the pickup and the first four bars of part A, which is the
+       half everyone knows. Durations below are in eighths, so a quarter is
+       2. F is F# from the key signature, B, is an octave down, and the
+       whole line is shifted up an octave for the tinny van register.
+       SWING is left at 0: a van plays it off a chip, dead straight. */
+    jingle(){
+      const BEAT = 0.21, SWING = 0;                     // BEAT = one eighth
+      const NOTE = { 'B4':494, 'C5':523, 'D5':587, 'E5':659,
+                     'F#5':740, 'G5':784, 'A5':880, 'B5':988 };
+      const TUNE = [
+        ['B5',1],['A5',1],                                             // pickup
+        ['G5',1],['F#5',1],['G5',1],['A5',1],['G5',2],['B4',1],['C5',1],
+        ['D5',1],['E5',1],['D5',1],['B4',1],['D5',2],['G5',1],['A5',1],
+        ['B5',2],['B5',2],['B5',1],['A5',1],['G5',1],['A5',1],
+        ['B5',2],['A5',2],['A5',2],['B5',1],['A5',1]
+      ];
+      let at = 0, pair = 0;
+      for (const [name, beats] of TUNE) {
+        const swung = beats === 1 ? beats * (1 + (pair % 2 ? -SWING : SWING)) : beats;
+        pair = beats === 1 ? pair + 1 : 0;
+        buzz(at, NOTE[name], .075, BEAT * swung * 0.9, beats >= 2);
+        at += BEAT * swung;
+      }
+      return at;                                        // how long it runs
+    },
     /* Day complete: a G-major arpeggio resolving on the octave, offset
        so it starts after the checkbox clack. Square waves read louder
        than sines at the same gain, hence the low numbers. */
@@ -1250,8 +1398,8 @@ const blank = () => ({
              crt:false, crtScan:true, crtRoll:false,
              crtWarpOn:false, crtWarp:3, crtVig:true, crtFringe:true,
              sweep:true, hints:true, autoCarry:true,
-             lightColor:null, darkColor:null, markColor:null,
-             sound:true, keys:true, config:false }
+             lightColor:null, darkColor:null, markColor:null, blinkColor:null,
+             sound:true, keys:true, controls:'default', blink:false, config:false }
 });
 let state = blank();
 let view  = todayKey();
@@ -1650,11 +1798,14 @@ function normalize(raw){
   s.settings.crtWarp   = warpLevel(s.settings.crtWarp);
   s.settings.hints = s.settings.hints !== false;    // default on
   s.settings.sweep = s.settings.sweep !== false;    // default on
+  s.settings.blink = !!s.settings.blink;            // default off
   s.settings.autoCarry = s.settings.autoCarry !== false;   // default on
   s.settings.lightColor = okHex(s.settings.lightColor);
   s.settings.darkColor  = okHex(s.settings.darkColor);
   s.settings.markColor  = okHex(s.settings.markColor);
+  s.settings.blinkColor = okHex(s.settings.blinkColor);
   if (!FONT_IDS.includes(s.settings.font)) s.settings.font = 'mono';
+  if (!SCHEME_IDS.includes(s.settings.controls)) s.settings.controls = 'default';
 
   /* v3 and earlier had user-named tags. There is no meaningful mapping
      from a label to a mark, so each old tag is carried over positionally
@@ -1721,11 +1872,14 @@ const el = {
   fileGlyph:$('fileGlyph'), fileTxt:$('fileTxt'), saveTxt:$('saveTxt'), hint:$('hint'),
   openBtn:$('openBtn'), newBtn:$('newBtn'), grantBtn:$('grantBtn'), importBtn:$('importBtn'),
   unlinkBtn:$('unlinkBtn'), dlBtn:$('dlBtn'),
-  themeSeg:$('themeSeg'), sndBtn:$('sndBtn'), keysBtn:$('keysBtn'),
+  themeSeg:$('themeSeg'), ctrlSeg:$('ctrlSeg'),
+  sndBtn:$('sndBtn'), keysBtn:$('keysBtn'),
   cfgBtn:$('cfgBtn'), config:$('config'), screen:$('screen'),
   goalAdd:$('goalAdd'), legend:$('legend'),
   fontSeg:$('fontSeg'), glowBtn:$('glowBtn'), crtBtn:$('crtBtn'), hintsBtn:$('hintsBtn'),
-  colLight:$('colLight'), colDark:$('colDark'), colMark:$('colMark'), colReset:$('colReset'),
+  blinkBtn:$('blinkBtn'),
+  colLight:$('colLight'), colDark:$('colDark'), colMark:$('colMark'),
+  colBlink:$('colBlink'), colReset:$('colReset'),
   crtScanBtn:$('crtScanBtn'), crtRollBtn:$('crtRollBtn'),
   crtVigBtn:$('crtVigBtn'), crtFringeBtn:$('crtFringeBtn'),
   crtWarpBtn:$('crtWarpBtn'), warpRange:$('warpRange'), warpVal:$('warpVal'),
@@ -1746,23 +1900,111 @@ const K = IS_MAC
   : { alt:'Alt', enter:'Enter', esc:'Esc', del:'Del', shift:'Shift' };
 const combo = k => IS_MAC ? `${K.alt}${k}` : `${K.alt}+${k}`;
 
-const SHORTCUTS = [
-  [['↑','↓'],                        'line'],
-  [['←','→'],                        'control'],
-  [[K.enter],                        'add / activate'],
-  [[IS_MAC ? K.shift + K.enter : `${K.shift}+${K.enter}`], 'select'],
-  [['E'],                            'edit'],
-  [['T'],                            'mark'],
-  [['1–8'],                          'pick mark'],
-  [[K.del],                          'delete'],
-  [['U'],                            'undo'],
-  [['N'],                            'new'],
-  [['C'],                            'config'],
-  [[combo('←'), combo('→')],         'back / forward'],
-  [[combo('W')],                     'day / week'],
-  [[combo('T')],                     'theme'],
-  [[K.esc],                          'cancel']
+/* ══ control schemes ═══════════════════════════════════════════════
+   The arrows, Enter, Shift+Enter, Escape, the digits and the Option combos
+   are bound in every scheme, so a scheme only adds idioms on top and
+   switching one on cannot leave the app unreachable.
+
+   Plain letters are ignored while a text field has focus, which is what
+   makes the Vim scheme work: Escape leaves the field, then hjkl move.
+   Emacs binds Control instead, so it needs no such mode. Chrome reserves
+   Ctrl+N and Ctrl+O on Windows and Linux, where those fall back to the
+   arrows; on macOS the browser uses Command for them and they are free. */
+const SCHEMES = [
+  { id:'default', label:'Default' },
+  { id:'emacs',   label:'Emacs'   },
+  { id:'vim',     label:'Vim'     }
 ];
+const SCHEME_IDS = SCHEMES.map(s => s.id);
+
+const KEYMAPS = {
+  default: {
+    edit:['e'], mark:['t'], undo:['u'], new:['n'], config:['c']
+  },
+  emacs: {
+    /* Off macOS, Chrome takes Ctrl+N and Ctrl+O for itself and a page cannot
+       cancel them, so those two move to Alt there rather than being
+       advertised and doing something disruptive. Ctrl+P/F/B/D/G are
+       cancellable everywhere. macOS puts new window and open on Command,
+       which leaves the whole Control row free. */
+    down:[IS_MAC ? 'C-n' : 'M-n'], up:['C-p'], right:['C-f'], left:['C-b'],
+    edit:['e'], mark:['t'], undo:['u','C-/'], config:['c'],
+    new:['n', IS_MAC ? 'C-o' : 'M-o'],
+    remove:['C-d'], cancel:['C-g']
+  },
+  vim: {
+    down:['j'], up:['k'], right:['l'], left:['h'],
+    edit:['i'], mark:['m'], undo:['u'], new:['o'], config:[','],
+    remove:['x'], prevDay:['['], nextDay:[']'], first:['g'], last:['S-g']
+  }
+};
+let scheme = 'default';
+const keysFor = action => (KEYMAPS[scheme] || KEYMAPS.default)[action] || [];
+
+const KEY_GLYPH = {
+  Backspace:K.del, Delete:K.del, Escape:K.esc, Enter:K.enter,
+  ArrowUp:'↑', ArrowDown:'↓', ArrowLeft:'←', ArrowRight:'→'
+};
+
+/* 'C-n' -> ⌃N, 'S-g' -> ⇧G, 'j' -> J */
+function pretty(spec){
+  let mods = '', k = spec;
+  const take = (p, mac, other) => {
+    if (!k.startsWith(p)) return;
+    mods += IS_MAC ? mac : other; k = k.slice(2);
+  };
+  take('C-', '⌃', 'Ctrl+');
+  take('M-', K.alt, K.alt + '+');
+  take('S-', K.shift, K.shift + '+');
+  return mods + (KEY_GLYPH[k] || (k.length === 1 ? k.toUpperCase() : k));
+}
+
+function matchKey(spec, e){
+  let ctrl = false, alt = false, shift = false, k = spec;
+  if (k.startsWith('C-')) { ctrl  = true; k = k.slice(2); }
+  if (k.startsWith('M-')) { alt   = true; k = k.slice(2); }
+  if (k.startsWith('S-')) { shift = true; k = k.slice(2); }
+  if (e.metaKey || !!e.ctrlKey !== ctrl || !!e.altKey !== alt) return false;
+  const letter = k.length === 1 && /[a-z]/i.test(k);
+  /* Option+letter emits a dead-key character on macOS, so a modified letter
+     is matched on the physical key instead */
+  if (letter && alt) return e.code === 'Key' + k.toUpperCase();
+  if (letter && !!e.shiftKey !== shift) return false;
+  return String(e.key || '').toLowerCase() === k.toLowerCase();
+}
+
+/* A binding fires inside a text field only if it carries a modifier, and
+   never if it would delete something. */
+function pressed(action, e){
+  for (const spec of keysFor(action)) {
+    if (!matchKey(spec, e)) continue;
+    if (!isField(document.activeElement)) return true;
+    if (/^[CM]-/.test(spec) && action !== 'remove') return true;
+  }
+  return false;
+}
+
+function shortcuts(){
+  const of = a => keysFor(a).map(pretty);
+  const plus = (base, ...more) => base.concat(more.flat());
+  return [
+    [plus(['↑','↓'], of('down'), of('up')),               'line'],
+    [plus(['←','→'], of('left'), of('right')),            'control'],
+    [[K.enter],                                           'add / activate'],
+    [[IS_MAC ? K.shift + K.enter : `${K.shift}+${K.enter}`], 'select'],
+    [of('edit'),                                          'edit'],
+    [of('mark'),                                          'mark'],
+    [['1–8'],                                             'pick mark'],
+    [plus([K.del], of('remove')),                         'delete'],
+    [of('undo'),                                          'undo'],
+    [of('new'),                                           'new'],
+    [of('config'),                                        'config'],
+    [plus([combo('←'), combo('→')], of('prevDay'), of('nextDay')), 'back / forward'],
+    [[combo('W')],                                        'day / week'],
+    [[combo('T')],                                        'theme'],
+    [plus([K.esc], of('cancel')),                         'cancel']
+  ];
+}
 
 /* ══ keyboard navigation ═══════════════════════════════════════════
    The whole UI is one grid of lines. ↑/↓ step between lines, ←/→ step
@@ -1831,10 +2073,11 @@ function buildLines(){
   if (!el.config.hidden) {
     add([el.openBtn, el.newBtn, el.grantBtn, el.unlinkBtn, el.importBtn, el.dlBtn]);
     add([el.autoBtn]);
-    add([el.colLight, el.colDark, el.colMark, el.colReset]);
+    add([el.colLight, el.colDark, el.colMark, el.colBlink, el.colReset]);
     add([...el.fontSeg.children]);
     add([...el.themeSeg.children]);
-    add([el.glowBtn, el.sweepBtn, el.hintsBtn]);
+    add([...el.ctrlSeg.children]);
+    add([el.glowBtn, el.sweepBtn, el.hintsBtn, el.blinkBtn]);
     add([el.crtBtn, el.crtScanBtn, el.crtRollBtn, el.crtWarpBtn, el.warpRange,
          el.crtVigBtn, el.crtFringeBtn]);
     add([el.sndBtn, el.keysBtn]);
@@ -1873,11 +2116,26 @@ function focusAt(line, col){
   row[ci].focus();
 }
 
+/* Vim treats a text field as insert mode: plain letters type there rather
+   than move, so parking the cursor in one strands it. Motion steps over
+   such lines, and so does the restore after a repaint — otherwise deleting
+   the last task would drop the cursor into the entry box with no way out.
+   `o` and `i` are how you get in on purpose. Returns -1 when there is
+   nothing left in that direction. */
+function textFree(line, d){
+  if (scheme !== 'vim') return line;
+  let l = line;
+  while (l >= 0 && l < lines.length && lines[l].length && lines[l].every(isTextEntry)) l += d;
+  return (l >= 0 && l < lines.length) ? l : -1;
+}
+
 function moveV(d){
   const at = locate(document.activeElement);
   SM();
   if (!at) { focusAt(d > 0 ? 0 : lines.length - 1, cur.col); return; }
-  focusAt(at.line + d, at.col);            // clamped at both ends
+  const line = textFree(at.line + d, d);
+  if (line < 0) return;                    // nothing past it in that direction
+  focusAt(line, at.col);                   // clamped at both ends
 }
 
 function moveH(d){
@@ -1898,7 +2156,7 @@ const backToInput = () => (mode === 'week' ? el.goalText : el.input).focus();
 
 function paintKeys(){
   el.note.textContent = '';
-  SHORTCUTS.forEach(([keys, label], i) => {
+  shortcuts().forEach(([keys, label], i) => {
     if (i) el.note.append(document.createTextNode(' · '));
     keys.forEach((k, j) => {
       if (j) el.note.append(document.createTextNode('/'));
@@ -1919,8 +2177,9 @@ function paintKeys(){
    creation, otherwise every repaint would snap the wave back to the top. */
 const SWEEP_PERIOD = 5.5, SWEEP_STEP = 0.22; // must match the CSS duration/step
 const sweepEpoch = Date.now();
+let sweepNow = 0;                        // set once per paint, see paintAll
 function sweepPhase(i, n){
-  const wall = ((Date.now() - sweepEpoch) / 1000) % SWEEP_PERIOD;
+  const wall = (((sweepNow || Date.now()) - sweepEpoch) / 1000) % SWEEP_PERIOD;
   const own  = ((n - 1 - i) * SWEEP_STEP) % SWEEP_PERIOD;
   return `-${((wall + own) % SWEEP_PERIOD).toFixed(3)}s`;
 }
@@ -2262,7 +2521,65 @@ function paintStatus(){
                             'Open links an existing file · New replaces one';
 }
 
+/* ══ meltdown ══════════════════════════════════════════════════════
+   Hammer the config button and the picture melts. Nothing here is saved and
+   nothing is left behind: a class goes on, a timer takes it off, and the
+   drawer keeps toggling underneath as it always did. */
+const MELT_TAPS = 7, MELT_WINDOW = 2200, MELT_HOLD = 8000;
+let cfgTaps = [], meltTimer = null;
+
+function meltdown(){
+  if (document.documentElement.classList.contains('melt')) return;
+  document.documentElement.classList.add('melt');
+  if (sndOn) Sfx.jingle();
+  clearTimeout(meltTimer);
+  meltTimer = setTimeout(unmelt, MELT_HOLD);
+}
+
+function unmelt(){
+  clearTimeout(meltTimer);
+  meltTimer = null;
+  cfgTaps = [];
+  document.documentElement.classList.remove('melt');
+}
+
+/* Counts taps in a rolling window; a slow hand never trips it. */
+function tapConfig(){
+  const now = Date.now();
+  cfgTaps = cfgTaps.filter(t => now - t < MELT_WINDOW);
+  cfgTaps.push(now);
+  if (cfgTaps.length >= MELT_TAPS) { cfgTaps = []; meltdown(); }
+}
+
+/* A cycle length and a start offset per button, assigned once and left alone
+   so a repaint does not restart every lamp in step; buttons built fresh by a
+   repaint simply get their own.
+
+   Only some of them take part. A panel where every lamp is live reads as
+   chaos rather than character: the rest stay steady, and the flicker is a
+   fraction of a percent of a cycle that runs for the better part of a
+   minute, so what you get is one blink somewhere every few seconds. A
+   duration of 0s is how a button opts out — it disables the animation
+   without needing a second class. */
+const LAMP_SHARE = 0.5;                  // how many buttons blink at all
+const LAMP_STUTTER = 0.3;                // how many of those blink twice
+const LAMP_MIN = 20, LAMP_MAX = 52;      // seconds per cycle
+
+function seedLamps(){
+  for (const b of document.querySelectorAll('button')) {
+    if (b.style.getPropertyValue('--lamp')) continue;
+    const lit = Math.random() < LAMP_SHARE;
+    b.style.setProperty('--lamp', (-Math.random() * LAMP_MAX).toFixed(2) + 's');
+    b.style.setProperty('--lamp-dur', lit
+      ? (LAMP_MIN + Math.random() * (LAMP_MAX - LAMP_MIN)).toFixed(2) + 's'
+      : '0s');
+    b.style.setProperty('--lamp-dip', (0.28 + Math.random() * 0.27).toFixed(2));
+    if (lit && Math.random() < LAMP_STUTTER) b.classList.add('stutter');
+  }
+}
+
 function paintAll(){
+  sweepNow = Date.now();                 // every row this paint shares one clock
   const want = focusHint || locate(document.activeElement);
   focusHint = null;
   taskLines = []; goalLines = []; weekLines = [];
@@ -2272,9 +2589,13 @@ function paintAll(){
   else                 { paintMeter(); paintList(); }
   paintSel(); paintCarry(); paintStatus();
   buildLines();
+  seedLamps();
 
   // keep the keyboard cursor where it was, clamped if the line went away
-  if (want) focusAt(want.line, want.col);
+  if (want) {
+    const line = textFree(want.line, -1);
+    focusAt(line < 0 ? textFree(want.line, 1) : line, want.col);
+  }
 }
 
 /* ══ task actions ══════════════════════════════════════════════════ */
@@ -2623,6 +2944,12 @@ function buildSeg(node, items, key, onPick){
   }
 }
 
+function setScheme(id){
+  if (!SCHEME_IDS.includes(id)) return;
+  state.settings.controls = id;
+  applySettings(); S('flip'); touch(); paintAll();
+}
+
 function setFont(id){
   if (!FONT_IDS.includes(id)) return;
   state.settings.font = id;
@@ -2638,7 +2965,8 @@ function setColor(key, hex){
 }
 
 function resetColors(){
-  state.settings.lightColor = state.settings.darkColor = state.settings.markColor = null;
+  state.settings.lightColor = state.settings.darkColor = null;
+  state.settings.markColor = state.settings.blinkColor = null;
   applySettings(); S('flip'); touch(); paintAll();
 }
 
@@ -2669,6 +2997,12 @@ function applySettings(){
   for (const b of el.themeSeg.children)
     b.setAttribute('aria-pressed', String(b.dataset.pick === theme));
 
+  scheme = SCHEME_IDS.includes(state.settings.controls) ? state.settings.controls : 'default';
+  state.settings.controls = scheme;
+  for (const b of el.ctrlSeg.children)
+    b.setAttribute('aria-pressed', String(b.dataset.pick === scheme));
+  paintKeys();                          // the legend is drawn from the scheme
+
   /* Tones. Inline custom properties outrank the theme blocks, and every
      other token (page, panel, hair, muted, faint, slot, row-hover) mixes
      off these two — so setting them restyles the whole app. */
@@ -2688,6 +3022,14 @@ function applySettings(){
   el.colLight.value = light || pole.light;
   el.colDark.value  = dark  || pole.dark;
   el.colMark.value  = mark  || MARK_DEFAULT[isDark ? 'dark' : 'light'];
+
+  /* No colour means the plain dimming blink, so this stays unset rather than
+     falling back to a default the user never chose. Reset clears it. */
+  const lamp = okHex(state.settings.blinkColor);
+  put('--blink-lit', lamp && `color-mix(in srgb, ${lamp} 78%, transparent)`);
+  put('--blink-dim', lamp && `color-mix(in srgb, ${lamp} 38%, transparent)`);
+  document.documentElement.classList.toggle('blink-tint', !!lamp);
+  el.colBlink.value = lamp || MARK_DEFAULT[isDark ? 'dark' : 'light'];
 
   // mirrored for the pre-paint script so overrides land before first paint
   try { localStorage.setItem('todo.daily.colors', JSON.stringify({ light, dark })); } catch {}
@@ -2745,6 +3087,11 @@ function applySettings(){
   el.sweepBtn.setAttribute('aria-pressed', String(sweep));
   el.sweepBtn.textContent = `Sweep ${sweep ? '●' : '○'}`;
 
+  const blink = !!state.settings.blink;
+  document.documentElement.classList.toggle('blink', blink);
+  el.blinkBtn.setAttribute('aria-pressed', String(blink));
+  el.blinkBtn.textContent = `Blink ${blink ? '●' : '○'}`;
+
   const auto = state.settings.autoCarry !== false;
   el.autoBtn.setAttribute('aria-pressed', String(auto));
   el.autoBtn.textContent = `Auto ${auto ? '●' : '○'}`;
@@ -2762,7 +3109,7 @@ function applySettings(){
   el.sndBtn.setAttribute('aria-pressed', String(sndOn));
   el.sndBtn.textContent = `Sound ${sndOn ? '●' : '○'}`;
   el.keysBtn.setAttribute('aria-pressed', String(keysOn));
-  el.keysBtn.textContent = `Keys ${keysOn ? '●' : '○'}`;
+  el.keysBtn.textContent = `Typing ${keysOn ? '●' : '○'}`;
   el.keysBtn.disabled = !sndOn;
 
   const open = !!state.settings.config;
@@ -2880,7 +3227,7 @@ el.input.addEventListener('blur',  () => el.cursor.style.visibility = '');
 el.goalForm.addEventListener('submit', e => { e.preventDefault(); addGoal(); });
 el.goalText.addEventListener('keydown', e => { if (e.key !== 'Enter') SK(); });
 
-el.cfgBtn.addEventListener('click', () => setConfig(el.config.hidden));
+el.cfgBtn.addEventListener('click', () => { tapConfig(); setConfig(el.config.hidden); });
 el.glowBtn.addEventListener('click',  () => setToggle('glow',  !state.settings.glow));
 el.crtBtn.addEventListener('click', () => setToggle('crt', !state.settings.crt));
 el.crtWarpBtn.addEventListener('click', () => setToggle('crtWarpOn', !state.settings.crtWarpOn));
@@ -2895,9 +3242,11 @@ for (const part of CRT_PARTS)
 el.colLight.addEventListener('input', e => setColor('lightColor', e.target.value));
 el.colDark.addEventListener('input',  e => setColor('darkColor',  e.target.value));
 el.colMark.addEventListener('input',  e => setColor('markColor',  e.target.value));
+el.colBlink.addEventListener('input', e => setColor('blinkColor', e.target.value));
 el.colReset.addEventListener('click', () => { S('tap'); resetColors(); });
 
 el.sweepBtn.addEventListener('click', () => setToggle('sweep', state.settings.sweep === false));
+el.blinkBtn.addEventListener('click', () => setToggle('blink', !state.settings.blink));
 el.autoBtn.addEventListener('click', () => {
   setToggle('autoCarry', state.settings.autoCarry === false);
   autoCarry();                          // switching it on takes effect at once
@@ -2943,6 +3292,37 @@ document.addEventListener('keydown', e => {
       case 'ArrowRight': e.preventDefault(); go(1);  return;
     }
   }
+  /* Scheme bindings are resolved before the modifier bail-out below, since
+     Emacs binds Control combinations. */
+  if (pressed('down', e)  && vFree()) { e.preventDefault(); moveV(1);  return; }
+  if (pressed('up', e)    && vFree()) { e.preventDefault(); moveV(-1); return; }
+  if (pressed('right', e) && hFree()) { e.preventDefault(); moveH(1);  return; }
+  if (pressed('left', e)  && hFree()) { e.preventDefault(); moveH(-1); return; }
+  if (pressed('first', e)) { e.preventDefault(); SM(); focusAt(0, 0); return; }
+  if (pressed('last', e))  { e.preventDefault(); SM(); focusAt(lines.length - 1, 0); return; }
+  if (pressed('prevDay', e)) { e.preventDefault(); go(-1); return; }
+  if (pressed('nextDay', e)) { e.preventDefault(); go(1);  return; }
+  if (pressed('undo', e))   { e.preventDefault(); undo(); return; }
+  if (pressed('new', e))    { e.preventDefault(); backToInput(); return; }
+  if (pressed('config', e)) { e.preventDefault(); setConfig(el.config.hidden); return; }
+  if (pressed('cancel', e) && document.documentElement.classList.contains('melt')) {
+    e.preventDefault(); unmelt(); return;
+  }
+  if (pressed('cancel', e)) {
+    e.preventDefault();
+    if (selected.size) { selected.clear(); paintAll(); }
+    else backToInput();
+    return;
+  }
+  {
+    const sn = lineNav();
+    if (sn) {
+      if (pressed('edit', e)   && sn.edit)   { e.preventDefault(); sn.edit();   return; }
+      if (pressed('mark', e)   && sn.mark)   { e.preventDefault(); sn.mark();   return; }
+      if (pressed('remove', e) && sn.remove) { e.preventDefault(); sn.remove(); return; }
+    }
+  }
+
   if (e.altKey || e.ctrlKey || e.metaKey) return;
 
   /* Shift+Enter selects the focused row. preventDefault matters: without
@@ -2950,6 +3330,9 @@ document.addEventListener('keydown', e => {
   if (e.shiftKey && e.key === 'Enter') {
     const sn = lineNav();
     if (sn && sn.select) { e.preventDefault(); sn.select(); return; }
+  }
+  if (e.key === 'Escape' && document.documentElement.classList.contains('melt')) {
+    e.preventDefault(); unmelt(); return;
   }
   if (e.key === 'Escape' && selected.size) {
     e.preventDefault(); selected.clear(); paintAll(); return;
@@ -2967,19 +3350,9 @@ document.addEventListener('keydown', e => {
     if (e.key === 'End')  { e.preventDefault(); SM(); focusAt(lines.length - 1, 0); return; }
   }
 
-  if (!isField(document.activeElement)) {
-    if (e.key === 'u' || e.key === 'U') { e.preventDefault(); undo(); return; }
-    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); backToInput(); return; }
-    if (e.key === 'c' || e.key === 'C') {
-      e.preventDefault(); setConfig(el.config.hidden); return;
-    }
-  }
-
   const nav = lineNav();
   if (nav) {
     if (e.key === 'Escape') { e.preventDefault(); backToInput(); return; }
-    if ((e.key === 'e' || e.key === 'E') && nav.edit)   { e.preventDefault(); nav.edit(); return; }
-    if ((e.key === 't' || e.key === 'T') && nav.mark)   { e.preventDefault(); nav.mark(); return; }
     if (/^[0-9]$/.test(e.key) && nav.pick) { e.preventDefault(); nav.pick(+e.key); return; }
     if ((e.key === 'Backspace' || e.key === 'Delete') && nav.remove) {
       e.preventDefault(); nav.remove(); return;
@@ -3039,6 +3412,7 @@ window.addEventListener('visibilitychange', () => { if (document.hidden) flush()
 paintLegend();
 buildSeg(el.themeSeg, THEMES, 'pick', setTheme);
 buildSeg(el.fontSeg,  FONTS,  'pick', setFont);
+buildSeg(el.ctrlSeg, SCHEMES, 'pick', setScheme);
 paintKeys();
 try {
   const raw = localStorage.getItem(LS);

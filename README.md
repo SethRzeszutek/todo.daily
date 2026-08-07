@@ -30,6 +30,16 @@ activates, `⇧⏎` selects, `E` edits, `T` cycles a mark, `1`–`8` picks one,
 `⌥W` day/week, `⌥T` theme, `⎋` cancels. The legend under Config lists these
 in the app, and `Hints` hides them.
 
+**Controls** offers Default, Emacs (`⌃N`/`⌃P`/`⌃F`/`⌃B`, `⌃D`, `⌃G`) and Vim
+(`hjkl`, `i`, `o`, `x`, `m`, `[`/`]`). The arrows, `⏎`, `⎋`, the digits and the
+`⌥` combos stay bound in every scheme, and the legend re-renders to match.
+Vim's plain letters are inert while a text field has focus — that field is
+insert mode, so `⎋` leaves it and `o` or `i` returns.
+
+**Blink** makes the buttons flicker occasionally, like lamps on a panel. Set a
+colour beside it to have them light up in that colour instead of dimming;
+`Reset` in the colour row clears it.
+
 ## Publishing your own copy
 
 `index.html` is self-contained, so GitHub Pages needs nothing built:
